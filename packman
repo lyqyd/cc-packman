@@ -1,0 +1,198 @@
+local versionNumber = 1.1
+
+local args = {...}
+
+if #args < 1 then
+	print("Usage:")
+	print("packman <install|update|remove> <package name> [additional package names]")
+	return
+end
+
+function resetScreen()
+	term.clear()
+	term.setCursorPos(1,1)
+	xlim, ylim = term.getSize()
+	if xlim >= 20 then
+		term.write("=PackMan"..string.rep("=", xlim - 8))
+		term.setCursorPos(1,2)
+	end
+end
+
+function printError(errorText)
+	if term.isColor() then term.setTextColor(colors.red) end
+	print(text)
+	term.setTextColor(colors.white)
+	error()
+end
+
+function printWarning(warningText)
+	if term.isColor() then term.setTextColor(colors.yellow) end
+	print(text)
+	term.setTextColor(colors.white)
+end
+
+resetScreen()
+
+if args[1] ~= "noupdate" then
+	print("Updating Installer")
+	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
+	if remoteHandle then
+		fileHandle = io.open(shell.getRunningProgram(), "w")
+		if fileHandle then
+			fileHandle:write(remoteHandle.readAll())
+			fileHandle:close()
+		else
+			printError("Could not open file "..shell.getRunningProgram())
+		end
+	else
+		printError("Could not retrieve remote file.")
+	end
+	local fileHandle = io.open(shell.getRunningProgram(), "r")
+	if fileHandle then
+		local newVersionNumber = tonumber(string.match(fileHandle:read("*l"), "local versionNumber = (.*)"))
+		fileHandle:close()
+		if newVersionNumber > versionNumber then
+			shell.run(shell.getRunningProgram(), "noupdate")
+			return
+		end
+	end
+	print("Fetching Repository List")
+	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
+	if remoteHandle then
+		if not fs.exists("/usr") then fs.makeDir("/usr") end
+		fileHandle = io.open("/usr/repolist"..file, "w")
+		if fileHandle then
+			fileHandle:write(remoteHandle.readAll())
+			fileHandle:close()
+		else
+			printError("Could not open file /usr/repolist")
+		end
+	else
+		printError("Could not retrieve remote file: repolist")
+	end
+	resetScreen()
+end
+
+--construct package table.
+local packageTable = {}
+local state = ""
+local listHandle = io.open("/usr/repolist", "r")
+local entryTable
+local lineCount = 1
+for line in listHandle:lines() do
+	if state == "type" then
+		if (entryTable.type == "github" and (entryTable.author and entryTable.repository)) or (entryTable.type == "pastebin" and (entryTable.url and entryTable.target)) then
+			state = "main"
+		end
+	end
+	local property = string.match(line, "^s*(%S*)")
+	if property == "name" and state == "" then
+		if state == "" then
+			entryTable = {name = string.match(line, "^%s*name%s*=%s*(%S*)")}
+			state = "main"
+		else
+			if state ~= "dirty" then
+				printWarning("Unexpected 'name' at line "..lineCount)
+				state = "dirty"
+			end
+		end
+	elseif property == "type" then
+		if state == "main" then
+			entryTable.type = string.match(line, "^%s*type%s*=%s*(%S*)")
+			if entryTable.type == "github" or entryTable.type == "pastebin" then
+				state = "type"
+			else
+				if state ~= "dirty" then
+					printWarning("Unknown Repository Format at line "..lineCount)
+					state = "dirty"
+				end
+			end
+		else
+			if state ~= "dirty" then
+				printWarning("Unexpected 'type' at line "..lineCount)
+				state = "dirty"
+			end
+		end
+	elseif property == "author" or property == "repository" then
+		if state == "type" and entryTable.type == "github" then
+			entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
+		else
+			if state ~= "dirty" then
+				printWarning("Unexpected "..property.." at line "..lineCount)
+				state = "dirty"
+			end
+		end
+	elseif property == "url" or property == "target" then
+		if state == "type" and entryTable.type == "pastebin" then
+			entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
+		else
+			if state ~= "dirty" then
+				printWarning("Unexpected "..property.." at line "..lineCount)
+				state = "dirty"
+			end
+		end
+	elseif property == "category" or property == "target" or property == "setup" or property == "remove" or property == "dependencies" then
+		if state == "main" then
+			entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
+		else
+			if state ~= "dirty" then
+				printWarning("Unexpected "..property.." at line "..lineCount)
+				state = "dirty"
+			end
+		end
+	elseif property == "end" then
+		if state == "dirty" then
+			state = ""
+		elseif state == "type" then
+			printWarning("Unexpected end at line "..lineCount)
+		elseif state == "main" then
+			if entryTable.dependencies and entryTable.type and entryTable.category then
+				table.insert(packageTable, entryTable.name, entryTable)
+			else
+				entryTable = nil
+			end
+			state = ""
+		end
+	end
+	lineCount = lineCount + 1
+end
+if state ~= "" then
+	printWarning("Expected 'end' at line "..lineCount)
+listHandle:close()
+
+--construct category table, only available on advanced PCs.
+if term.isColor()
+	local categoryList = {}
+	local categoryCount = {}
+	for n, v in pairs(packageTable) do
+		for str in string.gmatch(v.category, "(%S*)") do
+			table.insert(categoryList, str)
+			if not categoryCount[str] then
+				categoryCount[str] = 0
+			else
+				categoryCount[str] = categoryCount[str] + 1
+			end
+		end
+	end
+end
+
+--[[for _, file in ipairs(fileList) do
+	print("Fetching file: "..file)
+	local remoteHandle = http.get("https://raw.github.com/lyqyd/LyqydOS/master/"..file)
+	if remoteHandle then
+		fileHandle = io.open("/LyqydOS/"..file, "w")
+		if fileHandle then
+			fileHandle:write(remoteHandle.readAll())
+			fileHandle:close()
+		else
+			printError("Could not open file /LyqydOS/"..file)
+		end
+	else
+		printError("Could not retrieve remote file: "..file)
+	end
+end
+print("Finished fetching!")]]
+
+
+term.clear()
+term.setCursorPos(1,1)
