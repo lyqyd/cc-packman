@@ -1,0 +1,18 @@
+name = LyqydOS
+	type = github
+		author = lyqyd
+		repository = LyqydOS
+	category = os
+	setup = installer setup
+	remove = installer remove
+	dependencies = none
+	target = "/LyqydOS"
+end
+
+name = LyqydNet
+	type = github
+		author = lyqyd
+		repository = ComputerCraft-LyqydNet
+	category = networking rednet api
+	dependencies = none
+end
