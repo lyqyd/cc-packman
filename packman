@@ -2,9 +2,10 @@ local versionNumber = 1.1
 
 local args = {...}
 
-if #args < 1 then
+if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "interactive") then
 	print("Usage:")
 	print("packman <install|update|remove> <package name> [additional package names]")
+	print("packman interactive")
 	return
 end
 
@@ -161,20 +162,128 @@ if state ~= "" then
 listHandle:close()
 
 --construct category table, only available on advanced PCs.
-if term.isColor()
-	local categoryList = {}
-	local categoryCount = {}
+local categoryList
+if term.isColor() then
+	categoryList = {}
 	for n, v in pairs(packageTable) do
 		for str in string.gmatch(v.category, "(%S*)") do
-			table.insert(categoryList, str)
-			if not categoryCount[str] then
-				categoryCount[str] = 0
+			if not categoryList[str] then
+				categoryList[str] = {[n] = true}
 			else
-				categoryCount[str] = categoryCount[str] + 1
+				categoryList[str][n] = true
 			end
 		end
 	end
 end
+
+function findDependencies(packageName, dependencyTable)
+	if packageTable[packageName] then
+		dependencyTable[packageName] = true
+		for packName in string.gmatch(packageTable[packageName].dependencies, "(%S*)") do
+			if packName ~= "none" and not dependencyTable[packName] then
+				dependencyTable, errmsg = findDependencies(packName, dependencyTable)
+				if not dependencyTable then return nil, errmsg
+			end
+		end
+	else
+		return nil, packageName
+	end
+	return dependencyTable
+end
+
+downloadFunctions = {}
+
+downloadFunctions.raw = function(url, path)
+	if type(url) == "table" then
+		--
+	end
+	http.request(url)
+	while true do
+		event, url, sourceText = os.pullEvent()
+		if event == "http_success" then
+			if not fs.exists(string.match(path, "(.-)/[^/]+$")) then fs.makeDir(string.match(path, "(.-)/[^/]+$")) end
+			local fileHandle = io.open(path, "w")
+			if fileHandle then
+				fileHandle:write(sourceText.readAll())
+				fileHandle:close()
+			else
+				printWarning("Unable to open file "..path)
+			end
+			return true
+		else
+			printWarning("Unable to fetch file "..path)
+			return false
+		end
+	end
+end
+
+downloadFunctions.github = function(package)
+	local function getDirectoryContents(path)
+		local fType, fPath = {}, {}
+		local response = http.get("https://api.github.com/repos/"..package.author.."/"..package.repository.."/contents/"..path.."/?ref=master")
+		if response then
+			response = response.readAll()
+			if response ~= nil then
+				for str in response:gmatch('"type": "(%w+)"') do table.insert(fType, str) end
+				for str in response:gmatch('"path": "([^\"]+)"') do table.insert(fPath, str) end
+			end
+		else
+			printWarning("Can't fetch repository information")
+			return nil
+		end
+		local directoryContents = {}
+		for i=1, #fType do
+			directoryContents[i] = {type = fType[i], path = fPath[i]}
+		end
+		return directoryContents
+	end
+	local function addDirectoryContents(path, contentsTable)
+		local contents = getDirectoryContents(path)
+		for n, file in ipairs(contents) do
+			if file.type = "dir" then
+				addDirectoryContents(file.path, contentsTable)
+			else
+				table.insert(contentsTable, file.path)
+			end
+		end
+		return contentsTable
+	end
+	local contents = addDirectoryContents("", {})
+	local localTarget = package.target or ""
+	for num, fileName in ipairs(contents) do
+		if not downloadFunctions.raw("https://raw.github.com/"..package.author.."/"..package.repository.."/master/"..fileName, fs.combine(localTarget, fileName)) then return false end
+	end
+end
+
+downloadFunctions.pastebin = function(package)
+	return downloadFunctions.raw("http://pastebin.com/raw.php?i="..package.url, package.target)
+end
+
+function installPackage(packageName)
+	local package = packageTable[packageName]
+	if downloadFunctions[package.type] then
+		if downloadFunctions[package.type](package) then 
+	end
+	--check for install script
+end
+
+local mode = table.remove(args, 1)
+
+if mode == "install" then
+	local installList = {}
+	if #args >= 1 then
+		for packageNumber, packageName in ipairs(args) do
+			local dependencies, errmsg = findDependencies(packageName, {})
+			if not dependencies then
+				printWarning("Could not install package "..packageName.." due to missing dependency: "..errmsg)
+			else
+				for k,v in pairs(dependencies) do
+					installList[k] = true
+				end
+			end
+		end
+		for packageName in pairs(installList) do
+			installPackage(packageName)
 
 --[[for _, file in ipairs(fileList) do
 	print("Fetching file: "..file)
