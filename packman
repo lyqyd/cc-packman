@@ -4,198 +4,42 @@ local args = {...}
 
 if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "interactive") then
 	print("Usage:")
-	print("packman <install|update|remove> <package name> [additional package names]")
+	print("packman <install|update|remove> <package name[s]>")
 	print("packman interactive")
 	return
 end
+
+local mode = ""
 
 function resetScreen()
 	term.clear()
 	term.setCursorPos(1,1)
 	xlim, ylim = term.getSize()
-	if xlim >= 20 then
-		term.write("=PackMan"..string.rep("=", xlim - 8))
-		term.setCursorPos(1,2)
+	if mode == "interactive" then
+		if xlim >= 9 then
+			term.write("=PackMan"..string.rep("=", xlim - 8))
+			term.setCursorPos(1,2)
+		end
 	end
 end
 
 function printError(errorText)
 	if term.isColor() then term.setTextColor(colors.red) end
-	print(text)
+	print(errorText)
 	term.setTextColor(colors.white)
 	error()
 end
 
 function printWarning(warningText)
 	if term.isColor() then term.setTextColor(colors.yellow) end
-	print(text)
+	print(warningText)
 	term.setTextColor(colors.white)
 end
 
 function printInformation(infoText)
 	if term.isColor() then term.setTextColor(colors.green) end
-	print(text)
+	print(infoText)
 	term.setTextColor(colors.white)
-end
-
-resetScreen()
-
-if args[1] ~= "noupdate" then
-	print("Updating Installer")
-	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
-	if remoteHandle then
-		fileHandle = io.open(shell.getRunningProgram(), "w")
-		if fileHandle then
-			fileHandle:write(remoteHandle.readAll())
-			fileHandle:close()
-		else
-			printError("Could not open file "..shell.getRunningProgram())
-		end
-	else
-		printError("Could not retrieve remote file.")
-	end
-	local fileHandle = io.open(shell.getRunningProgram(), "r")
-	if fileHandle then
-		local newVersionNumber = tonumber(string.match(fileHandle:read("*l"), "local versionNumber = (.*)"))
-		fileHandle:close()
-		if newVersionNumber > versionNumber then
-			shell.run(shell.getRunningProgram(), "noupdate")
-			return
-		end
-	end
-	print("Fetching Repository List")
-	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
-	if remoteHandle then
-		if not fs.exists("/usr") then fs.makeDir("/usr") end
-		fileHandle = io.open("/usr/repolist"..file, "w")
-		if fileHandle then
-			fileHandle:write(remoteHandle.readAll())
-			fileHandle:close()
-		else
-			printError("Could not open file /usr/repolist")
-		end
-	else
-		printError("Could not retrieve remote file: repolist")
-	end
-	resetScreen()
-end
-
---construct package table.
-local packageTable = {}
-local state = ""
-local listHandle = io.open("/usr/repolist", "r")
-local entryTable
-local lineCount = 1
-for line in listHandle:lines() do
-	if state == "type" then
-		if (entryTable.type == "github" and (entryTable.author and entryTable.repository)) or (entryTable.type == "pastebin" and (entryTable.url and entryTable.target)) then
-			state = "main"
-		end
-	end
-	local property = string.match(line, "^s*(%S*)")
-	if property == "name" and state == "" then
-		if state == "" then
-			entryTable = {name = string.match(line, "^%s*name%s*=%s*(%S*)")}
-			state = "main"
-		else
-			if state ~= "dirty" then
-				printWarning("Unexpected 'name' at line "..lineCount)
-				state = "dirty"
-			end
-		end
-	elseif property == "type" then
-		if state == "main" then
-			entryTable.type = string.match(line, "^%s*type%s*=%s*(%S*)")
-			if entryTable.type == "github" or entryTable.type == "pastebin" then
-				state = "type"
-			else
-				if state ~= "dirty" then
-					printWarning("Unknown Repository Format at line "..lineCount)
-					state = "dirty"
-				end
-			end
-		else
-			if state ~= "dirty" then
-				printWarning("Unexpected 'type' at line "..lineCount)
-				state = "dirty"
-			end
-		end
-	elseif property == "author" or property == "repository" then
-		if state == "type" and entryTable.type == "github" then
-			entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
-		else
-			if state ~= "dirty" then
-				printWarning("Unexpected "..property.." at line "..lineCount)
-				state = "dirty"
-			end
-		end
-	elseif property == "url" or property == "target" then
-		if state == "type" and entryTable.type == "pastebin" then
-			entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
-		else
-			if state ~= "dirty" then
-				printWarning("Unexpected "..property.." at line "..lineCount)
-				state = "dirty"
-			end
-		end
-	elseif property == "category" or property == "target" or property == "setup" or property == "remove" or property == "dependencies" then
-		if state == "main" then
-			entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
-		else
-			if state ~= "dirty" then
-				printWarning("Unexpected "..property.." at line "..lineCount)
-				state = "dirty"
-			end
-		end
-	elseif property == "end" then
-		if state == "dirty" then
-			state = ""
-		elseif state == "type" then
-			printWarning("Unexpected end at line "..lineCount)
-		elseif state == "main" then
-			if entryTable.dependencies and entryTable.type and entryTable.category then
-				if not entryTable.target then entryTable.target = "" end
-				table.insert(packageTable, entryTable.name, entryTable)
-			else
-				entryTable = nil
-			end
-			state = ""
-		end
-	end
-	lineCount = lineCount + 1
-end
-if state ~= "" then
-	printWarning("Expected 'end' at line "..lineCount)
-listHandle:close()
-
---construct category table, only available on advanced PCs.
-local categoryList
-if term.isColor() then
-	categoryList = {}
-	for n, v in pairs(packageTable) do
-		for str in string.gmatch(v.category, "(%S*)") do
-			if not categoryList[str] then
-				categoryList[str] = {[n] = true}
-			else
-				categoryList[str][n] = true
-			end
-		end
-	end
-end
-
-function findDependencies(packageName, dependencyTable)
-	if packageTable[packageName] then
-		dependencyTable[packageName] = true
-		for packName in string.gmatch(packageTable[packageName].dependencies, "(%S*)") do
-			if packName ~= "none" and not dependencyTable[packName] then
-				dependencyTable, errmsg = findDependencies(packName, dependencyTable)
-				if not dependencyTable then return nil, errmsg
-			end
-		end
-	else
-		return nil, packageName
-	end
-	return dependencyTable
 end
 
 downloadFunctions = {}
@@ -204,7 +48,7 @@ downloadFunctions.raw = function(url, path)
 	if type(url) == "table" then
 		local package = url
 		url = package.url
-		path = package.target
+		path = package.filename
 	end
 	http.request(url)
 	while true do
@@ -220,7 +64,7 @@ downloadFunctions.raw = function(url, path)
 			end
 			return true
 		else
-			printWarning("Unable to fetch file "..path)
+			printWarning("Unable to fetch file "..url)
 			return false
 		end
 	end
@@ -265,7 +109,172 @@ downloadFunctions.github = function(package)
 end
 
 downloadFunctions.pastebin = function(package)
-	return downloadFunctions.raw("http://pastebin.com/raw.php?i="..package.url, package.target)
+	return downloadFunctions.raw("http://pastebin.com/raw.php?i="..package.url, fs.combine(package.target, package.filename))
+end
+
+resetScreen()
+
+--[[if args[1] ~= "noupdate" then
+	print("Updating Installer")
+	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
+	if remoteHandle then
+		fileHandle = io.open(shell.getRunningProgram(), "w")
+		if fileHandle then
+			fileHandle:write(remoteHandle.readAll())
+			fileHandle:close()
+		else
+			printError("Could not open file "..shell.getRunningProgram())
+		end
+	else
+		printError("Could not retrieve remote file.")
+	end
+	local fileHandle = io.open(shell.getRunningProgram(), "r")
+	if fileHandle then
+		local newVersionNumber = tonumber(string.match(fileHandle:read("*l"), "local versionNumber = (.*)"))
+		fileHandle:close()
+		if newVersionNumber > versionNumber then
+			shell.run(shell.getRunningProgram(), "noupdate", unpack(args))
+			return
+		end
+	end
+	print("Fetching Repository List")
+	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
+	if remoteHandle then
+		if not fs.exists("/usr") then fs.makeDir("/usr") end
+		fileHandle = io.open("/usr/repolist"..file, "w")
+		if fileHandle then
+			fileHandle:write(remoteHandle.readAll())
+			fileHandle:close()
+		else
+			printError("Could not open file /usr/repolist")
+		end
+	else
+		printError("Could not retrieve remote file: repolist")
+	end
+	resetScreen()
+end]]
+
+--construct package table.
+local packageTable = {}
+local state = ""
+local listHandle = io.open("/usr/repolist", "r")
+local entryTable
+local lineCount = 1
+if listHandle then
+	for line in listHandle:lines() do
+		if state == "type" then
+			if (entryTable.type == "github" and (entryTable.author and entryTable.repository)) or ((entryTable.type == "pastebin" or entryTable.type == "raw") and (entryTable.url and entryTable.filename)) then
+				state = "main"
+			end
+		end
+		local property = string.match(line, "^%s*(%S*)")
+		if property == "name" and state == "" then
+			if state == "" then
+				entryTable = {name = string.match(line, "^%s*name%s*=%s*(%S*)")}
+				state = "main"
+			else
+				if state ~= "dirty" then
+					printWarning("Unexpected 'name' at line "..lineCount)
+					state = "dirty"
+				end
+			end
+		elseif property == "type" then
+			if state == "main" then
+				entryTable.type = string.match(line, "^%s*type%s*=%s*(%S*)")
+				if downloadFunctions[entryTable.type] then
+					state = "type"
+				else
+					if state ~= "dirty" then
+						printWarning("Unknown Repository Format at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			else
+				if state ~= "dirty" then
+					printWarning("Unexpected 'type' at line "..lineCount)
+					state = "dirty"
+				end
+			end
+		elseif property == "author" or property == "repository" then
+			if state == "type" and entryTable.type == "github" then
+				entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
+			else
+				if state ~= "dirty" then
+					printWarning("Unexpected "..property.." at line "..lineCount)
+					state = "dirty"
+				end
+			end
+		elseif property == "url" or property == "filename" then
+			if state == "type" and (entryTable.type == "pastebin" or entryTable.type == "raw") then
+				entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
+			else
+				if state ~= "dirty" then
+					printWarning("Unexpected "..property.." at line "..lineCount)
+					state = "dirty"
+				end
+			end
+		elseif property == "category" or property == "target" or property == "setup" or property == "remove" or property == "dependencies" then
+			if state == "main" then
+				entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
+			else
+				if state ~= "dirty" then
+					printWarning("Unexpected "..property.." at line "..lineCount)
+					state = "dirty"
+				end
+			end
+		elseif property == "end" then
+			if state == "dirty" then
+				state = ""
+			elseif state == "type" then
+				printWarning("Unexpected end at line "..lineCount)
+			elseif state == "main" then
+				if entryTable.dependencies and entryTable.type and entryTable.category then
+					if not entryTable.target then entryTable.target = "" end
+					packageTable[entryTable.name] = entryTable
+				else
+					entryTable = nil
+				end
+				state = ""
+			end
+		end
+		lineCount = lineCount + 1
+	end
+	if state ~= "" then
+		printWarning("Expected 'end' at line "..lineCount)
+	end
+	listHandle:close()
+else
+	printError("Could not open repository list!")
+end
+
+--construct category table, only available on advanced PCs.
+local categoryList
+if term.isColor() then
+	categoryList = {}
+	for n, v in pairs(packageTable) do
+		for str in string.gmatch(v.category, "(%S+)") do
+			if not categoryList[str] then
+				categoryList[str] = {[n] = true}
+			else
+				categoryList[str][n] = true
+			end
+		end
+	end
+end
+
+function findDependencies(packageName, dependencyTable)
+	if packageTable[packageName] then
+		dependencyTable[packageName] = true
+		for packName in string.gmatch(packageTable[packageName].dependencies, "(%S+)") do
+			if packName ~= "none" and not dependencyTable[packName] then
+				dependencyTable, errmsg = findDependencies(packName, dependencyTable)
+				if not dependencyTable then return nil, errmsg end
+			end
+		end
+	else
+		return nil, packageName
+	end
+	return dependencyTable
 end
 
 function installPackage(packageName)
@@ -280,6 +289,7 @@ function installPackage(packageName)
 		end
 		local programPath = fs.combine(package.target, table.remove(setupTable, 1))
 		shell.run(programPath, unpack(setupTable))
+		resetScreen()
 	end
 	return true
 end
@@ -299,8 +309,19 @@ if mode == "install" or mode == "update" then
 				end
 			end
 		end
-		for packageName in pairs(installList) do
-			if not installPackage(packageName) then printWarning("Could not "..mode.." package "..packageName) end
+		local installString = ""
+		for k, v in pairs(installList) do
+			installString = installString..k.." "
+		end
+		print("The following packages will be installed: ".. installString)
+		print("Continue? (Y/n)")
+		local input = read()
+		if string.sub(input:lower(), 1, 1) == "n" then
+			return true
+		else
+			for packageName in pairs(installList) do
+				if not installPackage(packageName) then printWarning("Could not "..mode.." package "..packageName) end
+			end
 		end
 	end
 elseif mode == "remove" then
@@ -322,6 +343,7 @@ elseif mode == "interactive" then
 	--interactive mode
 end
 
-
+--[[
 term.clear()
 term.setCursorPos(1,1)
+]]
