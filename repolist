@@ -6,7 +6,7 @@ name = LyqydOS
 	setup = installer setup
 	remove = installer remove
 	dependencies = none
-	target = "/LyqydOS"
+	target = /LyqydOS
 end
 
 name = LyqydNet
@@ -15,4 +15,13 @@ name = LyqydNet
 		repository = ComputerCraft-LyqydNet
 	category = networking rednet api
 	dependencies = none
+end
+
+name = location-api
+	type = raw
+		url = https://raw.github.com/lyqyd/LyqydNet-Programs/master/apis/location
+		filename = location
+	category = turtle api
+	dependencies = none
+	target = /apis
 end
