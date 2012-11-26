@@ -25,3 +25,11 @@ name = location-api
 	dependencies = none
 	target = /apis
 end
+
+name = nsh
+	type = pastebin
+		url = X5Fysdi4
+		filename = nsh
+	category = rednet shell remote
+	dependencies = none
+end
