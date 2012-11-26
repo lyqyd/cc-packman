@@ -48,13 +48,13 @@ downloadFunctions.raw = function(url, path)
 	if type(url) == "table" then
 		local package = url
 		url = package.url
-		path = package.filename
+		path = fs.combine(package.target, package.filename)
 	end
 	http.request(url)
 	while true do
 		event, url, sourceText = os.pullEvent()
 		if event == "http_success" then
-			if not fs.exists(string.match(path, "(.-)/[^/]+$")) then fs.makeDir(string.match(path, "(.-)/[^/]+$")) end
+			if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then fs.makeDir(string.match(path, "(.-)/[^/]+$")) end
 			local fileHandle = io.open(path, "w")
 			if fileHandle then
 				fileHandle:write(sourceText.readAll())
