@@ -2,7 +2,7 @@ local versionNumber = 1.1
 
 local args = {...}
 
-if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "interactive") then
+if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "interactive" and args[1] ~= "fetch") then
 	print("Usage:")
 	print("packman <install|update|remove> <package name[s]>")
 	print("packman interactive")
@@ -114,106 +114,108 @@ end
 
 resetScreen()
 
+if args[1] ~= "fetch"
 --construct package table.
-local packageTable = {}
-local state = ""
-local listHandle = io.open("/usr/repolist", "r")
-local entryTable
-local lineCount = 1
-if listHandle then
-	for line in listHandle:lines() do
-		if state == "type" then
-			if (entryTable.type == "github" and (entryTable.author and entryTable.repository)) or ((entryTable.type == "pastebin" or entryTable.type == "raw") and (entryTable.url and entryTable.filename)) then
-				state = "main"
-			end
-		end
-		local property = string.match(line, "^%s*(%S*)")
-		if property == "name" and state == "" then
-			if state == "" then
-				entryTable = {name = string.match(line, "^%s*name%s*=%s*(%S*)")}
-				state = "main"
-			else
-				if state ~= "dirty" then
-					printWarning("Unexpected 'name' at line "..lineCount)
-					state = "dirty"
+	local packageTable = {}
+	local state = ""
+	local listHandle = io.open("/usr/repolist", "r")
+	local entryTable
+	local lineCount = 1
+	if listHandle then
+		for line in listHandle:lines() do
+			if state == "type" then
+				if (entryTable.type == "github" and (entryTable.author and entryTable.repository)) or ((entryTable.type == "pastebin" or entryTable.type == "raw") and (entryTable.url and entryTable.filename)) then
+					state = "main"
 				end
 			end
-		elseif property == "type" then
-			if state == "main" then
-				entryTable.type = string.match(line, "^%s*type%s*=%s*(%S*)")
-				if downloadFunctions[entryTable.type] then
-					state = "type"
+			local property = string.match(line, "^%s*(%S*)")
+			if property == "name" and state == "" then
+				if state == "" then
+					entryTable = {name = string.match(line, "^%s*name%s*=%s*(%S*)")}
+					state = "main"
 				else
 					if state ~= "dirty" then
-						printWarning("Unknown Repository Format at line "..lineCount)
+						printWarning("Unexpected 'name' at line "..lineCount)
 						state = "dirty"
 					end
 				end
-			else
-				if state ~= "dirty" then
-					printWarning("Unexpected 'type' at line "..lineCount)
-					state = "dirty"
-				end
-			end
-		elseif property == "author" or property == "repository" then
-			if state == "type" and entryTable.type == "github" then
-				entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
-			else
-				if state ~= "dirty" then
-					printWarning("Unexpected "..property.." at line "..lineCount)
-					state = "dirty"
-				end
-			end
-		elseif property == "url" or property == "filename" then
-			if state == "type" and (entryTable.type == "pastebin" or entryTable.type == "raw") then
-				entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
-			else
-				if state ~= "dirty" then
-					printWarning("Unexpected "..property.." at line "..lineCount)
-					state = "dirty"
-				end
-			end
-		elseif property == "category" or property == "target" or property == "setup" or property == "remove" or property == "dependencies" then
-			if state == "main" then
-				entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
-			else
-				if state ~= "dirty" then
-					printWarning("Unexpected "..property.." at line "..lineCount)
-					state = "dirty"
-				end
-			end
-		elseif property == "end" then
-			if state == "dirty" then
-				state = ""
-			elseif state == "type" then
-				printWarning("Unexpected end at line "..lineCount)
-			elseif state == "main" then
-				if entryTable.dependencies and entryTable.type and entryTable.category then
-					if not entryTable.target then entryTable.target = "" end
-					packageTable[entryTable.name] = entryTable
+			elseif property == "type" then
+				if state == "main" then
+					entryTable.type = string.match(line, "^%s*type%s*=%s*(%S*)")
+					if downloadFunctions[entryTable.type] then
+						state = "type"
+					else
+						if state ~= "dirty" then
+							printWarning("Unknown Repository Format at line "..lineCount)
+							state = "dirty"
+						end
+					end
 				else
-					entryTable = nil
+					if state ~= "dirty" then
+						printWarning("Unexpected 'type' at line "..lineCount)
+						state = "dirty"
+					end
 				end
-				state = ""
+			elseif property == "author" or property == "repository" then
+				if state == "type" and entryTable.type == "github" then
+					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected "..property.." at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "url" or property == "filename" then
+				if state == "type" and (entryTable.type == "pastebin" or entryTable.type == "raw") then
+					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected "..property.." at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "category" or property == "target" or property == "setup" or property == "remove" or property == "dependencies" then
+				if state == "main" then
+					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected "..property.." at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "end" then
+				if state == "dirty" then
+					state = ""
+				elseif state == "type" then
+					printWarning("Unexpected end at line "..lineCount)
+				elseif state == "main" then
+					if entryTable.dependencies and entryTable.type and entryTable.category then
+						if not entryTable.target then entryTable.target = "" end
+						packageTable[entryTable.name] = entryTable
+					else
+						entryTable = nil
+					end
+					state = ""
+				end
 			end
+			lineCount = lineCount + 1
 		end
-		lineCount = lineCount + 1
+		if state ~= "" then
+			printWarning("Expected 'end' at line "..lineCount)
+		end
+		listHandle:close()
+	else
+		printError("Could not open repository list!")
 	end
-	if state ~= "" then
-		printWarning("Expected 'end' at line "..lineCount)
-	end
-	listHandle:close()
-else
-	printError("Could not open repository list!")
-end
 
-local categoryList= {}
-for n, v in pairs(packageTable) do
-	for str in string.gmatch(v.category, "(%S+)") do
-		if not categoryList[str] then
-			categoryList[str] = {[n] = true}
-		else
-			categoryList[str][n] = true
+	local categoryList= {}
+	for n, v in pairs(packageTable) do
+		for str in string.gmatch(v.category, "(%S+)") do
+			if not categoryList[str] then
+				categoryList[str] = {[n] = true}
+			else
+				categoryList[str][n] = true
+			end
 		end
 	end
 end
@@ -329,6 +331,8 @@ elseif mode == "fetch" then
 			local newVersionNumber = tonumber(string.match(fileHandle:read("*l"), "local versionNumber = (.*)"))
 			fileHandle:close()
 			if newVersionNumber > versionNumber then
+				repeat
+
 				shell.run(shell.getRunningProgram(), unpack(args))
 				return
 			end
