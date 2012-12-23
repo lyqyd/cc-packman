@@ -207,17 +207,13 @@ else
 	printError("Could not open repository list!")
 end
 
---construct category table, only available on advanced PCs.
-local categoryList
-if term.isColor() then
-	categoryList = {}
-	for n, v in pairs(packageTable) do
-		for str in string.gmatch(v.category, "(%S+)") do
-			if not categoryList[str] then
-				categoryList[str] = {[n] = true}
-			else
-				categoryList[str][n] = true
-			end
+local categoryList= {}
+for n, v in pairs(packageTable) do
+	for str in string.gmatch(v.category, "(%S+)") do
+		if not categoryList[str] then
+			categoryList[str] = {[n] = true}
+		else
+			categoryList[str][n] = true
 		end
 	end
 end
