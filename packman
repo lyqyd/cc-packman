@@ -114,46 +114,6 @@ end
 
 resetScreen()
 
---[[if args[1] ~= "noupdate" then
-	print("Updating Installer")
-	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
-	if remoteHandle then
-		fileHandle = io.open(shell.getRunningProgram(), "w")
-		if fileHandle then
-			fileHandle:write(remoteHandle.readAll())
-			fileHandle:close()
-		else
-			printError("Could not open file "..shell.getRunningProgram())
-		end
-	else
-		printError("Could not retrieve remote file.")
-	end
-	local fileHandle = io.open(shell.getRunningProgram(), "r")
-	if fileHandle then
-		local newVersionNumber = tonumber(string.match(fileHandle:read("*l"), "local versionNumber = (.*)"))
-		fileHandle:close()
-		if newVersionNumber > versionNumber then
-			shell.run(shell.getRunningProgram(), "noupdate", unpack(args))
-			return
-		end
-	end
-	print("Fetching Repository List")
-	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
-	if remoteHandle then
-		if not fs.exists("/usr") then fs.makeDir("/usr") end
-		fileHandle = io.open("/usr/repolist"..file, "w")
-		if fileHandle then
-			fileHandle:write(remoteHandle.readAll())
-			fileHandle:close()
-		else
-			printError("Could not open file /usr/repolist")
-		end
-	else
-		printError("Could not retrieve remote file: repolist")
-	end
-	resetScreen()
-end]]
-
 --construct package table.
 local packageTable = {}
 local state = ""
@@ -336,6 +296,45 @@ elseif mode == "remove" then
 				shell.run(programPath, unpack(removeTable))
 			else
 				printInformation("Package "..packageName.." must be manually uninstalled from /"..packageTable[packageName].target)
+			end
+		end
+	end
+elseif mode == "fetch" then
+	print("Updating Installer")
+	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
+	if remoteHandle then
+		fileHandle = io.open(shell.getRunningProgram(), "w")
+		if fileHandle then
+			fileHandle:write(remoteHandle.readAll())
+			fileHandle:close()
+		else
+			printError("Could not open file "..shell.getRunningProgram())
+		end
+	else
+		printError("Could not retrieve remote file.")
+	end
+	print("Fetching Repository List")
+	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
+	if remoteHandle then
+		if not fs.exists("/usr") then fs.makeDir("/usr") end
+		fileHandle = io.open("/usr/repolist", "w")
+		if fileHandle then
+			fileHandle:write(remoteHandle.readAll())
+			fileHandle:close()
+		else
+			printError("Could not open file /usr/repolist")
+		end
+	else
+		printError("Could not retrieve remote file: repolist")
+	end
+	if #args > 0 then
+		local fileHandle = io.open(shell.getRunningProgram(), "r")
+		if fileHandle then
+			local newVersionNumber = tonumber(string.match(fileHandle:read("*l"), "local versionNumber = (.*)"))
+			fileHandle:close()
+			if newVersionNumber > versionNumber then
+				shell.run(shell.getRunningProgram(), unpack(args))
+				return
 			end
 		end
 	end
