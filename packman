@@ -152,9 +152,10 @@ end
 
 resetScreen()
 
-if args[1] ~= "fetch"
+local packageTable = {}
+
+if args[1] ~= "fetch" then
 --construct package table.
-	local packageTable = {}
 	local state = ""
 	local listHandle = io.open("/usr/repolist", "r")
 	local entryTable
@@ -280,7 +281,7 @@ function installPackage(packageName)
 	end
 	if package.setup then
 		local setupTable = {}
-		for match in string.gmatch(package.setup, "(%S*)") do
+		for match in string.gmatch(package.setup, "(%S+)") do
 			table.insert(setupTable, match)
 		end
 		local programPath = fs.combine(package.target, table.remove(setupTable, 1))
@@ -344,10 +345,10 @@ elseif mode == "fetch" then
 			fileHandle:write(remoteHandle.readAll())
 			fileHandle:close()
 		else
-			printError("Could not open file "..shell.getRunningProgram())
+			printWarning("Could not open file "..shell.getRunningProgram())
 		end
 	else
-		printError("Could not retrieve remote file.")
+		printWarning("Could not retrieve remote file.")
 	end
 	print("Fetching Repository List")
 	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
@@ -369,8 +370,6 @@ elseif mode == "fetch" then
 			local newVersionNumber = tonumber(string.match(fileHandle:read("*l"), "local versionNumber = (.*)"))
 			fileHandle:close()
 			if newVersionNumber > versionNumber then
-				repeat
-
 				shell.run(shell.getRunningProgram(), unpack(args))
 				return
 			end
