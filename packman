@@ -42,6 +42,17 @@ function printInformation(infoText)
 	term.setTextColor(colors.white)
 end
 
+local downloadTypes = {
+	github = {
+		author = true,
+		repository = true,
+	},
+	bitbucket = {
+		author = true,
+		repository = true,
+	}
+}
+
 downloadFunctions = {}
 
 downloadFunctions.raw = function(url, path)
