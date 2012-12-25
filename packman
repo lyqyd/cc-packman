@@ -381,6 +381,9 @@ elseif mode == "fetch" then
 			local newVersionNumber = tonumber(string.match(fileHandle:read("*l"), "local versionNumber = (.*)"))
 			fileHandle:close()
 			if newVersionNumber > versionNumber then
+				while args[1] == "fetch" do
+					table.remove(args, 1)
+				end
 				shell.run(shell.getRunningProgram(), unpack(args))
 				return
 			end
