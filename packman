@@ -6,6 +6,7 @@ if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "re
 	print("Usage:")
 	print("packman <install|update|remove> <package name[s]>")
 	print("packman interactive")
+	print("packman fetch")
 	return
 end
 
@@ -42,6 +43,77 @@ function printInformation(infoText)
 	term.setTextColor(colors.white)
 end
 
+installedPackages = {}
+
+--build installed packages list from saved database.
+local dbHandle = io.open(".instPacks", "r")
+if dbHandle then
+	local package = ""
+	local entryTable
+	for line in dbHandle:lines() do
+		if string.match(line, "(=)") then
+			--new entry table time
+			if entryTable then
+				if not installedPackages[entryTable.name] then
+					installedPackages[entryTable.name] = entryTable
+				else
+					printError("Database is corrupt!")
+				end
+			end
+			entryTable = {name, version = string.match(line, "(.-)=(.*)"), files = {}}
+		else
+			table.insert(entryTable.files, line)
+		end
+	end
+	--catch final entry table.
+	if entryTable then
+		if not installedPackages[entryTable.name] then
+			installedPackages[entryTable.name] = entryTable
+		else
+			printError("Database is corrupt!")
+		end
+	end
+	dbHandle:close()
+end
+
+function updateDatabase(packageName, packageVersion, fileTable)
+	installedPackages[packageName] = {
+		name = packageName,
+		version = packageVersion,
+		files = {}
+	}
+	for i = 1, #fileTable do
+		installedPackages[packageName].files[i] = fileTable[i]
+	end
+end
+
+function writeDatabase()
+	local dbHandle = io.open(".instPacks", "w")
+	for _, package in pairs(installedPackages) do
+		dbHandle:write(package.name.."="..package.version.."\n")
+		for i = 1, #package.files do
+			dbHandle:write(package.files[i].."\n")
+		end
+	end
+	dbHandle:close()
+end
+
+local packAPI = {
+	pathList = {}
+}
+
+function packAPI.addFile(path)
+	table.insert(packAPI.pathList, path)
+end
+
+function packAPI.removeFile(path)
+	for i = #packAPI.pathList, 1, -1 do
+		if packAPI.pathList[i] == path then
+			table.remove(packAPI.pathList, i)
+		end
+	end
+end
+
 local downloadTypes = {
 	github = {
 		author = true,
@@ -66,11 +138,15 @@ downloadFunctions.raw = function(url, path)
 	while true do
 		event, url, sourceText = os.pullEvent()
 		if event == "http_success" then
-			if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then fs.makeDir(string.match(path, "(.-)/[^/]+$")) end
+			if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
+				fs.makeDir(string.match(path, "(.-)/[^/]+$"))
+				packAPI.addFile(string.match(path, "(.-)/[^/]+$"))
+			end
 			local fileHandle = io.open(path, "w")
 			if fileHandle then
 				fileHandle:write(sourceText.readAll())
 				fileHandle:close()
+				packAPI.addFile(path)
 			else
 				printWarning("Unable to open file "..path)
 			end
@@ -166,7 +242,7 @@ resetScreen()
 local packageTable = {}
 
 if args[1] ~= "fetch" then
---construct package table.
+	--construct package table.
 	local state = ""
 	local listHandle = io.open("/usr/repolist", "r")
 	local entryTable
@@ -174,7 +250,14 @@ if args[1] ~= "fetch" then
 	if listHandle then
 		for line in listHandle:lines() do
 			if state == "type" then
-				if ((entryTable.type == "github" or entryTable.type == "bitbucket") and (entryTable.author and entryTable.repository)) or ((entryTable.type == "pastebin" or entryTable.type == "raw") and (entryTable.url and entryTable.filename)) then
+				local allAttributes = true
+				for attribute in pairs(downloadTypes[entryTable.type]) do
+					if not entryTable[attribute] then
+						allAttributes = false
+						break
+					end
+				end
+				if allAttributes then
 					state = "main"
 				end
 			end
@@ -206,25 +289,7 @@ if args[1] ~= "fetch" then
 						state = "dirty"
 					end
 				end
-			elseif property == "author" or property == "repository" then
-				if state == "type" and (entryTable.type == "github" or entryTable.type == "bitbucket") then
-					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
-				else
-					if state ~= "dirty" then
-						printWarning("Unexpected "..property.." at line "..lineCount)
-						state = "dirty"
-					end
-				end
-			elseif property == "url" or property == "filename" then
-				if state == "type" and (entryTable.type == "pastebin" or entryTable.type == "raw") then
-					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
-				else
-					if state ~= "dirty" then
-						printWarning("Unexpected "..property.." at line "..lineCount)
-						state = "dirty"
-					end
-				end
-			elseif property == "category" or property == "target" or property == "setup" or property == "remove" or property == "dependencies" then
+			elseif property == "category" or property == "target" or property == "setup" or property == "remove" or property == "dependencies" or property == "version" then
 				if state == "main" then
 					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
 				else
@@ -238,14 +303,30 @@ if args[1] ~= "fetch" then
 					state = ""
 				elseif state == "type" then
 					printWarning("Unexpected end at line "..lineCount)
+					state = ""
 				elseif state == "main" then
-					if entryTable.dependencies and entryTable.type and entryTable.category then
+					--this line is the required entries for a valid repolist entry.
+					if entryTable.dependencies and entryTable.type and entryTable.category and entryTable.version then
 						if not entryTable.target then entryTable.target = "" end
 						packageTable[entryTable.name] = entryTable
 					else
 						entryTable = nil
 					end
 					state = ""
+				end
+			elseif state == "type" then
+				local propertyFound = false
+				for _, prop in pairs(downloadTypes[entryTable.type]) do
+					if property == prop then
+						propertyFound = true
+						break
+					end
+				end
+				if propertyFound then
+					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
+				else
+					printWarning("Unexpected "..property.." at line "..lineCount)
+					state = "dirty"
 				end
 			end
 			lineCount = lineCount + 1
@@ -296,7 +377,11 @@ function installPackage(packageName)
 			table.insert(setupTable, match)
 		end
 		local programPath = fs.combine(package.target, table.remove(setupTable, 1))
-		shell.run(programPath, unpack(setupTable))
+		os.run({packman = packAPI, __index = _G}, programPath, unpack(setupTable))
+		--record and reset the API's internal path list for subsequent package use.
+		updateDatabase(packageName, packageTable[packageName].version, packAPI.pathList)
+		writeDatabase()
+		packAPI.pathList = {}
 		resetScreen()
 	end
 	return true
