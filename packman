@@ -46,34 +46,36 @@ end
 installedPackages = {}
 
 --build installed packages list from saved database.
-local dbHandle = io.open(".instPacks", "r")
-if dbHandle then
-	local package = ""
-	local entryTable
-	for line in dbHandle:lines() do
-		if string.match(line, "(=)") then
-			--new entry table time
-			if entryTable then
-				if not installedPackages[entryTable.name] then
-					installedPackages[entryTable.name] = entryTable
-				else
-					printError("Database is corrupt!")
+if fs.exists(".instPacks") then
+	local dbHandle = io.open(".instPacks", "r")
+	if dbHandle then
+		local package = ""
+		local entryTable
+		for line in dbHandle:lines() do
+			if string.match(line, "(=)") then
+				--new entry table time
+				if entryTable then
+					if not installedPackages[entryTable.name] then
+						installedPackages[entryTable.name] = entryTable
+					else
+						printError("Database is corrupt!")
+					end
 				end
+				entryTable = {name, version = string.match(line, "(.-)=(.*)"), files = {}}
+			else
+				table.insert(entryTable.files, line)
 			end
-			entryTable = {name, version = string.match(line, "(.-)=(.*)"), files = {}}
-		else
-			table.insert(entryTable.files, line)
 		end
-	end
-	--catch final entry table.
-	if entryTable then
-		if not installedPackages[entryTable.name] then
-			installedPackages[entryTable.name] = entryTable
-		else
-			printError("Database is corrupt!")
+		--catch final entry table.
+		if entryTable then
+			if not installedPackages[entryTable.name] then
+				installedPackages[entryTable.name] = entryTable
+			else
+				printError("Database is corrupt!")
+			end
 		end
+		dbHandle:close()
 	end
-	dbHandle:close()
 end
 
 function updateDatabase(packageName, packageVersion, fileTable)
@@ -459,6 +461,9 @@ elseif mode == "fetch" then
 		end
 	else
 		printError("Could not retrieve remote file: repolist")
+	end
+	while args[1] == "fetch" do
+		table.remove(args, 1)
 	end
 	if #args > 0 then
 		local fileHandle = io.open(shell.getRunningProgram(), "r")
