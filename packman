@@ -10,6 +10,11 @@ if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "re
 	return
 end
 
+--lower all arguments
+for i = 1, #args do
+	args[i] = string.lower(args[i])
+end
+
 local mode = ""
 
 function resetScreen()
@@ -38,7 +43,7 @@ function printWarning(warningText)
 end
 
 function printInformation(infoText)
-	if term.isColor() then term.setTextColor(colors.green) end
+	if term.isColor() then term.setTextColor(colors.lime) end
 	print(infoText)
 	term.setTextColor(colors.white)
 end
@@ -61,13 +66,14 @@ if fs.exists(".instPacks") then
 						printError("Database is corrupt!")
 					end
 				end
-				entryTable = {name, version = string.match(line, "(.-)=(.*)"), files = {}}
+				entryTable = {files = {}}
+				entryTable.name, entryTable.version = string.match(line, "(.-)=(.*)")
 			else
 				table.insert(entryTable.files, line)
 			end
 		end
 		--catch final entry table.
-		if entryTable then
+		if entryTable and entryTable.name then
 			if not installedPackages[entryTable.name] then
 				installedPackages[entryTable.name] = entryTable
 			else
@@ -124,7 +130,15 @@ local downloadTypes = {
 	bitbucket = {
 		author = true,
 		repository = true,
-	}
+	},
+	pastebin = {
+		url = true,
+		filename = true,
+	},
+	raw = {
+		url = true,
+		filename = true,
+	},
 }
 
 downloadFunctions = {}
@@ -183,6 +197,7 @@ downloadFunctions.github = function(package)
 	end
 	local function addDirectoryContents(path, contentsTable)
 		local contents = getDirectoryContents(path)
+		if not contents then return nil, "no contents" end
 		for n, file in ipairs(contents) do
 			if file.type == "dir" then
 				addDirectoryContents(file.path, contentsTable)
@@ -193,6 +208,7 @@ downloadFunctions.github = function(package)
 		return contentsTable
 	end
 	local contents = addDirectoryContents("", {})
+	if not contents then return nil, "content fetch failure" end
 	local localTarget = package.target or ""
 	for num, fileName in ipairs(contents) do
 		if not downloadFunctions.raw("https://raw.github.com/"..package.author.."/"..package.repository.."/master/"..fileName, fs.combine(localTarget, fileName)) then return false end
@@ -266,7 +282,7 @@ if args[1] ~= "fetch" then
 			local property = string.match(line, "^%s*(%S*)")
 			if property == "name" and state == "" then
 				if state == "" then
-					entryTable = {name = string.match(line, "^%s*name%s*=%s*(%S*)")}
+					entryTable = {name = string.lower(string.match(line, "^%s*name%s*=%s*(%S*)"))}
 					state = "main"
 				else
 					if state ~= "dirty" then
@@ -291,12 +307,24 @@ if args[1] ~= "fetch" then
 						state = "dirty"
 					end
 				end
-			elseif property == "category" or property == "target" or property == "setup" or property == "remove" or property == "dependencies" or property == "version" then
+			elseif property == "category" or property == "target" or property == "setup" or property == "remove" or property == "version" then
 				if state == "main" then
 					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
 				else
 					if state ~= "dirty" then
 						printWarning("Unexpected "..property.." at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "dependencies" then
+				if state == "main" then
+					entryTable.dependencies = {}
+					for packName in string.gmatch(string.match(line, "^%s*"..property.."%s*=%s*(.*)"), "(%S+)") do
+						entryTable.dependencies[packName] = true
+					end
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected dependencies at line "..lineCount)
 						state = "dirty"
 					end
 				end
@@ -318,7 +346,7 @@ if args[1] ~= "fetch" then
 				end
 			elseif state == "type" then
 				local propertyFound = false
-				for _, prop in pairs(downloadTypes[entryTable.type]) do
+				for prop in pairs(downloadTypes[entryTable.type]) do
 					if property == prop then
 						propertyFound = true
 						break
@@ -353,10 +381,10 @@ if args[1] ~= "fetch" then
 	end
 end
 
-function findDependencies(packageName, dependencyTable)
+function addDependencies(packageName, dependencyTable)
 	if packageTable[packageName] then
 		dependencyTable[packageName] = true
-		for packName in string.gmatch(packageTable[packageName].dependencies, "(%S+)") do
+		for packName in pairs(packageTable[packageName].dependencies) do
 			if packName ~= "none" and not dependencyTable[packName] then
 				dependencyTable, errmsg = findDependencies(packName, dependencyTable)
 				if not dependencyTable then return nil, errmsg end
@@ -366,6 +394,16 @@ function findDependencies(packageName, dependencyTable)
 		return nil, packageName
 	end
 	return dependencyTable
+end
+
+--flesh out dependencies
+for pName, pData in pairs(packageTable) do
+	pData.dependencies, errmsg = addDependencies(pName, {})
+	if not pData.dependencies then
+		--if dependencies could not be resolved, remove the package.
+		printWarning("Could not resolve dependency on "..errmsg.." in package "..pName)
+		packageTable[pName] = nil
+	end
 end
 
 function installPackage(packageName)
@@ -381,25 +419,45 @@ function installPackage(packageName)
 		local programPath = fs.combine(package.target, table.remove(setupTable, 1))
 		os.run({packman = packAPI, __index = _G}, programPath, unpack(setupTable))
 		--record and reset the API's internal path list for subsequent package use.
-		updateDatabase(packageName, packageTable[packageName].version, packAPI.pathList)
-		writeDatabase()
 		packAPI.pathList = {}
 		resetScreen()
 	end
+	updateDatabase(packageName, packageTable[packageName].version, packAPI.pathList)
+	writeDatabase()
 	return true
+end
+
+function removePackage(packageName)
+	local package = packageTable[packageName]
+	if package.remove then
+		local removeTable = {}
+		for match in string.gmatch(package.remove, "(%S+)") do
+			table.insert(removeTable, match)
+		end
+		local programPath = fs.combine(package.target, table.remove(setupTable, 1))
+		os.run({packman = packAPI, __index = _G}, programPath, unpack(setupTable))
+	end
+	local fileList = installedPackages[packageName].files
+	for i = 1, #fileList do
+		if fs.exists(fileList[i]) then
+			fs.delete(fileList[i])
+		end
+	end
+	--remove package from list of installed packages.
+	installedPackages[packageName] = nil
+	writeDatabase()
 end
 
 local mode = table.remove(args, 1)
 
-if mode == "install" or mode == "update" then
-	local installList = {}
+if mode == "install" then
 	if #args >= 1 then
+		local installList = {}
 		for packageNumber, packageName in ipairs(args) do
-			local dependencies, errmsg = findDependencies(packageName, {})
-			if not dependencies then
-				printWarning("Could not "..mode.." package "..packageName.." due to missing dependency: "..errmsg)
+			if not packageTable[packageName] then
+				printWarning("Could not install package "..packageName..".")
 			else
-				for k,v in pairs(dependencies) do
+				for k,v in pairs(packageTable[packageName].dependencies) do
 					installList[k] = true
 				end
 			end
@@ -408,30 +466,108 @@ if mode == "install" or mode == "update" then
 		for k, v in pairs(installList) do
 			installString = installString..k.." "
 		end
-		print("The following packages will be installed: ".. installString)
+		if #installString > 0 then
+			print("The following packages will be installed: "..installString)
+			print("Continue? (Y/n)")
+			local input = read()
+			if string.sub(input:lower(), 1, 1) == "n" then
+				return true
+			else
+				for packageName in pairs(installList) do
+					if not installPackage(packageName) then printWarning("Could not "..mode.." package "..packageName) end
+				end
+			end
+		end
+	end
+elseif mode == "update" then
+	local updateList = {}
+	if #args >= 1 then
+		updateList = args
+	else
+		for k, v in pairs(installedPackages) do
+			table.insert(updateList, k)
+		end
+	end
+	for i = #updateList, 1, -1 do
+		if installedPackages[updateList[i]].version == packageTable[updateList[i]].version then
+			table.remove(updateList, i)
+		end
+	end
+	if #updateList > 0 then
+		local updateString = ""
+		for i = 1, #updateList do
+			updateString = updateString..updateList[i].." "
+		end
+		print("The following packages will be updated: "..updateString)
 		print("Continue? (Y/n)")
 		local input = read()
 		if string.sub(input:lower(), 1, 1) == "n" then
 			return true
 		else
-			for packageName in pairs(installList) do
-				if not installPackage(packageName) then printWarning("Could not "..mode.." package "..packageName) end
+			for _, packageName in pairs(updateList) do
+				removePackage(packageName)
+				installPackage(packageName)
 			end
 		end
+	else
+		print("Nothing to do!")
+		return true
 	end
 elseif mode == "remove" then
 	if #args >= 1 then
-		for packageNumber, packageName in ipairs(args) do
-			if packageTable[packageName].remove then
-				local removeTable = {}
-				for match in string.gmatch(packageTable[packageName].remove, "(%S*)") do
-					table.insert(removeTable, match)
-				end
-				local programPath = fs.combine(packageTable[packageName].target, table.remove(removeTable, 1))
-				shell.run(programPath, unpack(removeTable))
-			else
-				printInformation("Package "..packageName.." must be manually uninstalled from /"..packageTable[packageName].target)
+		for i = #args, 1, -1 do
+			if not installedPackages[args[1]] then
+				table.remove(args, i)
 			end
+		end
+		local packageList = args
+		dependeesList = {}
+		--find packages which depend on the packages we are removing.
+		for pName, pData in pairs(packageTable) do
+			if not packageList[pName] then
+				for dName in pairs(pData.dependencies) do
+					for _, packName in pairs(packageList) do
+						if packName == dName then
+							dependeesList[pName] = true
+							break
+						end
+					end
+					if dependeesList[pName] then
+						break
+					end
+				end
+			end
+		end
+		local removeString = ""
+		local dependeesString = ""
+		for i = 1, #packageList do
+			removeString = removeString..packageList[i].." "
+			if dependeesList[packageList[i]] then
+				dependeesList[packageList[i]] = nil
+			end
+		end
+		for dName in pairs(dependeesList) do
+			dependeesString = dependeesString..dName.." "
+		end
+		if #removeString > 0 then
+			print("The following packages will be removed: "..removeString)
+			if #dependeesString > 0 then
+				print("The following packages will also be removed due to missing dependencies: "..dependeesString)
+			end
+			print("Continue? (y/N)")
+			local input = read()
+			if string.sub(input:lower(), 1, 1) == "y" then
+				for _, pName in pairs(packageList) do
+					removePackage(pName)
+				end
+				for pName in pairs(dependeesList) do
+					removePackage(pName)
+				end
+			else
+				return true
+			end
+		else
+			print("Nothing to do!")
 		end
 	end
 elseif mode == "fetch" then
