@@ -7,6 +7,7 @@ name = LyqydOS
 	remove = installer remove
 	dependencies = none
 	target = /LyqydOS
+	version = 0.8
 end
 
 name = LyqydNet
@@ -15,6 +16,7 @@ name = LyqydNet
 		repository = ComputerCraft-LyqydNet
 	category = networking rednet api
 	dependencies = none
+	version = 1.4
 end
 
 name = location-api
@@ -24,6 +26,7 @@ name = location-api
 	category = turtle api
 	dependencies = none
 	target = /apis
+	version = 0.1
 end
 
 name = nsh
@@ -32,4 +35,5 @@ name = nsh
 		filename = nsh
 	category = rednet shell remote
 	dependencies = none
+	version = 0.5
 end
