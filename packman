@@ -379,30 +379,30 @@ if args[1] ~= "fetch" then
 			end
 		end
 	end
-end
 
-function addDependencies(packageName, dependencyTable)
-	if packageTable[packageName] then
-		dependencyTable[packageName] = true
-		for packName in pairs(packageTable[packageName].dependencies) do
-			if packName ~= "none" and not dependencyTable[packName] then
-				dependencyTable, errmsg = findDependencies(packName, dependencyTable)
-				if not dependencyTable then return nil, errmsg end
+	function addDependencies(packageName, dependencyTable)
+		if packageTable[packageName] then
+			dependencyTable[packageName] = true
+			for packName in pairs(packageTable[packageName].dependencies) do
+				if packName ~= "none" and not dependencyTable[packName] then
+					dependencyTable, errmsg = findDependencies(packName, dependencyTable)
+					if not dependencyTable then return nil, errmsg end
+				end
 			end
+		else
+			return nil, packageName
 		end
-	else
-		return nil, packageName
+		return dependencyTable
 	end
-	return dependencyTable
-end
 
---flesh out dependencies
-for pName, pData in pairs(packageTable) do
-	pData.dependencies, errmsg = addDependencies(pName, {})
-	if not pData.dependencies then
-		--if dependencies could not be resolved, remove the package.
-		printWarning("Could not resolve dependency on "..errmsg.." in package "..pName)
-		packageTable[pName] = nil
+	--flesh out dependencies
+	for pName, pData in pairs(packageTable) do
+		pData.dependencies, errmsg = addDependencies(pName, {})
+		if not pData.dependencies then
+			--if dependencies could not be resolved, remove the package.
+			printWarning("Could not resolve dependency on "..errmsg.." in package "..pName)
+			packageTable[pName] = nil
+		end
 	end
 end
 
@@ -440,7 +440,13 @@ function removePackage(packageName)
 	local fileList = installedPackages[packageName].files
 	for i = 1, #fileList do
 		if fs.exists(fileList[i]) then
-			fs.delete(fileList[i])
+			if fs.isDir(fileList[i]) then
+				if #fs.list(fileList[i]) == 0 then
+					fs.delete(fileList[i])
+				end
+			else
+				fs.delete(fileList[i])
+			end
 		end
 	end
 	--remove package from list of installed packages.
