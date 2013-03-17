@@ -30,9 +30,9 @@ name = location-api
 end
 
 name = nsh
-	type = pastebin
-		url = X5Fysdi4
-		filename = nsh
+	type = github
+		author = lyqyd
+		repository = cc-netshell
 	category = rednet shell remote
 	dependencies = none
 	version = 0.6
