@@ -269,7 +269,87 @@ elseif mode == "fetch" then
 		end
 	end
 elseif mode == "interactive" then
-	--interactive mode
+	package.printInformation = function() end
+	package.printWarning = function() end
+	package.printError = error
+	local state = ""
+	local search = ""
+	local searchResults = {}
+	local alphaList = {}
+	local pListIndex, pListOffset = 1, 1
+	local columnX = math.max(math.floor((term.getSize()) / 3), 2)
+	local isColor = term.isColor()
+
+	for name in pairs(package.list) do
+		table.insert(alphaList, name)
+	end
+	table.sort(alphaList)
+
+	local function drawTop()
+		if process and process.id() then
+			--set window caption
+		else
+			term.setBackgroundColor(colors.white)
+			term.setTextColor(colors.black)
+			local start = " PackMan"
+			if #state > 0 then
+				start = start.." - "..state
+			end
+			local x = term.getSize()
+			start = start..string.rep(" ", x - #start)
+			term.write(start)
+			term.setCursorPos(1, 2)
+		end
+	end
+
+	local function drawCategoryList()
+		local _, yOff = term.getCursorPos()
+		local x, y = term.getSize()
+		for n, name in pairs(categorySorted) do
+			local currY = n + yOff - 1
+			if currY > y then break end
+			term.setCursorPos(1, currY)
+			local line = string.sub(name, 1, columnX - 1)
+			if mode == state then
+				term.setTextColor(isColor and colors.white or colors.black)
+				term.setBackgroundColor(isColor and colors.blue or colors.white)
+			else
+				term.setTextColor(colors.white)
+				term.setBackgroundColor(isColor and colors.grey or colors.black)
+			end
+			term.write(line)
+			term.setTextColor(colors.white)
+			term.setBackgroundColor(isColor and colors.lightGrey or colors.black)
+			term.setCursorPos(columnX, currY)
+			term.write(isColor and " " or "|")
+		end
+		term.setCursorPos(columnX + 1, yOff)
+	end
+
+	local function drawPackageList()
+		local function writePackageLine(packName)
+			--
+		end
+
+		if state == "search" then
+			--from search results
+			for _, name in pairs(searchResults) do
+				writePackageLine(name)
+			end
+		elseif #state > 0 then
+			--use the selected category name
+		end
+	end
+
+	local function draw()
+		term.clear()
+		drawTop()
+		drawCategoryList()
+	end
+
+	while true do
+		draw()
+	end
 end
 
 --[[
