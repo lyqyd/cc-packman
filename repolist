@@ -7,7 +7,8 @@ name = LyqydOS
 	remove = installer remove
 	dependencies = none
 	target = /LyqydOS
-	version = 0.8
+	version = 0.9
+	size = 66707
 end
 
 name = LyqydNet
@@ -17,6 +18,7 @@ name = LyqydNet
 	category = networking rednet api
 	dependencies = none
 	version = 1.4
+	size = 31874
 end
 
 name = location-api
@@ -27,6 +29,7 @@ name = location-api
 	dependencies = none
 	target = /apis
 	version = 0.2
+	size = 2671
 end
 
 name = nsh
@@ -36,4 +39,5 @@ name = nsh
 	category = rednet shell remote
 	dependencies = none
 	version = 0.6
+	size = 18854
 end
