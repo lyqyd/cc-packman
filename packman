@@ -1,12 +1,20 @@
 local versionNumber = 1.1
 
+if not package then os.loadAPI("package") end
+
 local args = {...}
 
 if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "interactive" and args[1] ~= "fetch") then
 	print("Usage:")
 	print("packman <install|update|remove> <package name[s]>")
 	print("packman interactive")
+	print("packman fetch")
 	return
+end
+
+--lower all arguments
+for i = 1, #args do
+	args[i] = string.lower(args[i])
 end
 
 local mode = ""
@@ -15,11 +23,13 @@ function resetScreen()
 	term.clear()
 	term.setCursorPos(1,1)
 	xlim, ylim = term.getSize()
-	if mode == "interactive" then
-		if xlim >= 9 then
-			term.write("=PackMan"..string.rep("=", xlim - 8))
-			term.setCursorPos(1,2)
-		end
+	if xlim >= 9 then
+		term.setTextColor(colors.black)
+		term.setBackgroundColor(colors.white)
+		term.write(" PackMan"..string.rep(" ", xlim - 8))
+		term.setCursorPos(1,2)
+		term.setTextColor(colors.white)
+		term.setBackgroundColor(colors.black)
 	end
 end
 
@@ -30,289 +40,78 @@ function printError(errorText)
 	error()
 end
 
+package.printError = printError
+
 function printWarning(warningText)
 	if term.isColor() then term.setTextColor(colors.yellow) end
 	print(warningText)
 	term.setTextColor(colors.white)
 end
 
+package.printWarning = printWarning
+
 function printInformation(infoText)
-	if term.isColor() then term.setTextColor(colors.green) end
+	if term.isColor() then term.setTextColor(colors.lime) end
 	print(infoText)
 	term.setTextColor(colors.white)
 end
 
-local downloadTypes = {
-	github = {
-		author = true,
-		repository = true,
-	},
-	bitbucket = {
-		author = true,
-		repository = true,
-	}
-}
-
-downloadFunctions = {}
-
-downloadFunctions.raw = function(url, path)
-	if type(url) == "table" then
-		local package = url
-		url = package.url
-		path = fs.combine(package.target, package.filename)
-	end
-	printInformation("Fetching: "..url)
-	http.request(url)
-	while true do
-		event, url, sourceText = os.pullEvent()
-		if event == "http_success" then
-			if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then fs.makeDir(string.match(path, "(.-)/[^/]+$")) end
-			local fileHandle = io.open(path, "w")
-			if fileHandle then
-				fileHandle:write(sourceText.readAll())
-				fileHandle:close()
-			else
-				printWarning("Unable to open file "..path)
-			end
-			printInformation("Done!")
-			return true
-		else
-			printWarning("Unable to fetch file "..url)
-			return false
-		end
-	end
-end
-
-downloadFunctions.github = function(package)
-	local function getDirectoryContents(path)
-		local fType, fPath = {}, {}
-		local response = http.get("https://api.github.com/repos/"..package.author.."/"..package.repository.."/contents/"..path)
-		if response then
-			response = response.readAll()
-			if response ~= nil then
-				for str in response:gmatch('"type":%s*"(%w+)",') do table.insert(fType, str) end
-				for str in response:gmatch('"path":%s*"([^\"]+)",') do table.insert(fPath, str) end
-			end
-		else
-			printWarning("Can't fetch repository information")
-			return nil
-		end
-		local directoryContents = {}
-		for i=1, #fType do
-			directoryContents[i] = {type = fType[i], path = fPath[i]}
-		end
-		return directoryContents
-	end
-	local function addDirectoryContents(path, contentsTable)
-		local contents = getDirectoryContents(path)
-		for n, file in ipairs(contents) do
-			if file.type == "dir" then
-				addDirectoryContents(file.path, contentsTable)
-			else
-				table.insert(contentsTable, file.path)
-			end
-		end
-		return contentsTable
-	end
-	local contents = addDirectoryContents("", {})
-	local localTarget = package.target or ""
-	for num, fileName in ipairs(contents) do
-		if not downloadFunctions.raw("https://raw.github.com/"..package.author.."/"..package.repository.."/master/"..fileName, fs.combine(localTarget, fileName)) then return false end
-	end
-	return true
-end
-
-downloadFunctions.bitbucket = function(package)
-	local function getDirectoryContents(path)
-		local directoryContents = {}
-		local response = http.get("https://api.bitbucket.org/1.0/repositories/"..package.author.."/"..package.repository.."/src/default"..path)
-		if response then
-			response = response.readAll()
-			if response ~= nil then
-				for str in string.gmatch(string.match(response, '"directories": %[(.-)%]'), '"([^,\"]+)"') do table.insert(directoryContents, {type = "dir", path = str}) end
-				for str in string.gmatch(string.match(response, '"files": %[(.-)%]'), '"path": "([^\"]+)"') do table.insert(directoryContents, {type = "file", path = str}) end
-			end
-		else
-			printWarning("Can't fetch repository information")
-			return nil
-		end
-		return directoryContents
-	end
-	local function addDirectoryContents(path, contentsTable)
-		local contents = getDirectoryContents(path)
-		for n, file in ipairs(contents) do
-			if file.type == "dir" then
-				addDirectoryContents(path..file.path.."/", contentsTable)
-			else
-				table.insert(contentsTable, file.path)
-			end
-		end
-		return contentsTable
-	end
-	local contents = addDirectoryContents("/", {})
-	local localTarget = package.target or ""
-	for num, fileName in ipairs(contents) do
-		if not downloadFunctions.raw("https://bitbucket.org/"..package.author.."/"..package.repository.."/raw/default/"..fileName, fs.combine(localTarget, fileName)) then return false end
-	end
-	return true
-end
-
-downloadFunctions.pastebin = function(package)
-	return downloadFunctions.raw("http://pastebin.com/raw.php?i="..package.url, fs.combine(package.target, package.filename))
-end
+package.printInformation = printInformation
 
 resetScreen()
 
-local packageTable = {}
+local categoryList = {}
+local categorySorted = {}
 
 if args[1] ~= "fetch" then
---construct package table.
-	local state = ""
-	local listHandle = io.open("/usr/repolist", "r")
-	local entryTable
-	local lineCount = 1
-	if listHandle then
-		for line in listHandle:lines() do
-			if state == "type" then
-				if ((entryTable.type == "github" or entryTable.type == "bitbucket") and (entryTable.author and entryTable.repository)) or ((entryTable.type == "pastebin" or entryTable.type == "raw") and (entryTable.url and entryTable.filename)) then
-					state = "main"
-				end
-			end
-			local property = string.match(line, "^%s*(%S*)")
-			if property == "name" and state == "" then
-				if state == "" then
-					entryTable = {name = string.match(line, "^%s*name%s*=%s*(%S*)")}
-					state = "main"
-				else
-					if state ~= "dirty" then
-						printWarning("Unexpected 'name' at line "..lineCount)
-						state = "dirty"
-					end
-				end
-			elseif property == "type" then
-				if state == "main" then
-					entryTable.type = string.match(line, "^%s*type%s*=%s*(%S*)")
-					if downloadFunctions[entryTable.type] then
-						state = "type"
-					else
-						if state ~= "dirty" then
-							printWarning("Unknown Repository Format at line "..lineCount)
-							state = "dirty"
-						end
-					end
-				else
-					if state ~= "dirty" then
-						printWarning("Unexpected 'type' at line "..lineCount)
-						state = "dirty"
-					end
-				end
-			elseif property == "author" or property == "repository" then
-				if state == "type" and (entryTable.type == "github" or entryTable.type == "bitbucket") then
-					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
-				else
-					if state ~= "dirty" then
-						printWarning("Unexpected "..property.." at line "..lineCount)
-						state = "dirty"
-					end
-				end
-			elseif property == "url" or property == "filename" then
-				if state == "type" and (entryTable.type == "pastebin" or entryTable.type == "raw") then
-					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
-				else
-					if state ~= "dirty" then
-						printWarning("Unexpected "..property.." at line "..lineCount)
-						state = "dirty"
-					end
-				end
-			elseif property == "category" or property == "target" or property == "setup" or property == "remove" or property == "dependencies" then
-				if state == "main" then
-					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
-				else
-					if state ~= "dirty" then
-						printWarning("Unexpected "..property.." at line "..lineCount)
-						state = "dirty"
-					end
-				end
-			elseif property == "end" then
-				if state == "dirty" then
-					state = ""
-				elseif state == "type" then
-					printWarning("Unexpected end at line "..lineCount)
-				elseif state == "main" then
-					if entryTable.dependencies and entryTable.type and entryTable.category then
-						if not entryTable.target then entryTable.target = "" end
-						packageTable[entryTable.name] = entryTable
-					else
-						entryTable = nil
-					end
-					state = ""
-				end
-			end
-			lineCount = lineCount + 1
-		end
-		if state ~= "" then
-			printWarning("Expected 'end' at line "..lineCount)
-		end
-		listHandle:close()
-	else
-		printError("Could not open repository list!")
-	end
-
-	local categoryList= {}
-	for n, v in pairs(packageTable) do
+	for n, v in pairs(package.list) do
 		for str in string.gmatch(v.category, "(%S+)") do
 			if not categoryList[str] then
 				categoryList[str] = {[n] = true}
+				table.insert(categorySorted, str)
 			else
 				categoryList[str][n] = true
 			end
 		end
 	end
-end
+	table.sort(categorySorted)
 
-function findDependencies(packageName, dependencyTable)
-	if packageTable[packageName] then
-		dependencyTable[packageName] = true
-		for packName in string.gmatch(packageTable[packageName].dependencies, "(%S+)") do
-			if packName ~= "none" and not dependencyTable[packName] then
-				dependencyTable, errmsg = findDependencies(packName, dependencyTable)
-				if not dependencyTable then return nil, errmsg end
+	function addDependencies(packageName, dependencyTable)
+		if package.list[packageName] then
+			dependencyTable[packageName] = true
+			for packName in pairs(package.list[packageName].dependencies) do
+				if packName ~= "none" and not dependencyTable[packName] then
+					dependencyTable, errmsg = findDependencies(packName, dependencyTable)
+					if not dependencyTable then return nil, errmsg end
+				end
 			end
+		else
+			return nil, packageName
 		end
-	else
-		return nil, packageName
+		return dependencyTable
 	end
-	return dependencyTable
-end
 
-function installPackage(packageName)
-	local package = packageTable[packageName]
-	if downloadFunctions[package.type] then
-		if not downloadFunctions[package.type](package) then return false end
-	end
-	if package.setup then
-		local setupTable = {}
-		for match in string.gmatch(package.setup, "(%S+)") do
-			table.insert(setupTable, match)
+	--flesh out dependencies
+	for pName, pData in pairs(package.list) do
+		pData.dependencies, errmsg = addDependencies(pName, {})
+		if not pData.dependencies then
+			--if dependencies could not be resolved, remove the package.
+			printWarning("Could not resolve dependency on "..errmsg.." in package "..pName)
+			package.list[pName] = nil
 		end
-		local programPath = fs.combine(package.target, table.remove(setupTable, 1))
-		shell.run(programPath, unpack(setupTable))
-		resetScreen()
 	end
-	return true
 end
 
 local mode = table.remove(args, 1)
 
-if mode == "install" or mode == "update" then
-	local installList = {}
+if mode == "install" then
 	if #args >= 1 then
+		local installList = {}
 		for packageNumber, packageName in ipairs(args) do
-			local dependencies, errmsg = findDependencies(packageName, {})
-			if not dependencies then
-				printWarning("Could not "..mode.." package "..packageName.." due to missing dependency: "..errmsg)
+			if not package.list[packageName] then
+				printWarning("Could not install package "..packageName..".")
 			else
-				for k,v in pairs(dependencies) do
+				for k,v in pairs(package.list[packageName].dependencies) do
 					installList[k] = true
 				end
 			end
@@ -321,30 +120,108 @@ if mode == "install" or mode == "update" then
 		for k, v in pairs(installList) do
 			installString = installString..k.." "
 		end
-		print("The following packages will be installed: ".. installString)
+		if #installString > 0 then
+			print("The following packages will be installed: "..installString)
+			print("Continue? (Y/n)")
+			local input = read()
+			if string.sub(input:lower(), 1, 1) == "n" then
+				return true
+			else
+				for packageName in pairs(installList) do
+					if not package.install(packageName) then printWarning("Could not "..mode.." package "..packageName) end
+				end
+			end
+		end
+	end
+elseif mode == "update" then
+	local updateList = {}
+	if #args >= 1 then
+		updateList = args
+	else
+		for k, v in pairs(package.installed) do
+			table.insert(updateList, k)
+		end
+	end
+	for i = #updateList, 1, -1 do
+		if package.installed[updateList[i]].version == package.list[updateList[i]].version then
+			table.remove(updateList, i)
+		end
+	end
+	if #updateList > 0 then
+		local updateString = ""
+		for i = 1, #updateList do
+			updateString = updateString..updateList[i].." "
+		end
+		print("The following packages will be updated: "..updateString)
 		print("Continue? (Y/n)")
 		local input = read()
 		if string.sub(input:lower(), 1, 1) == "n" then
 			return true
 		else
-			for packageName in pairs(installList) do
-				if not installPackage(packageName) then printWarning("Could not "..mode.." package "..packageName) end
+			for _, packageName in pairs(updateList) do
+				removePackage(packageName)
+				installPackage(packageName)
 			end
 		end
+	else
+		print("Nothing to do!")
+		return true
 	end
 elseif mode == "remove" then
 	if #args >= 1 then
-		for packageNumber, packageName in ipairs(args) do
-			if packageTable[packageName].remove then
-				local removeTable = {}
-				for match in string.gmatch(packageTable[packageName].remove, "(%S*)") do
-					table.insert(removeTable, match)
-				end
-				local programPath = fs.combine(packageTable[packageName].target, table.remove(removeTable, 1))
-				shell.run(programPath, unpack(removeTable))
-			else
-				printInformation("Package "..packageName.." must be manually uninstalled from /"..packageTable[packageName].target)
+		for i = #args, 1, -1 do
+			if not package.installed[args[1]] then
+				table.remove(args, i)
 			end
+		end
+		local packageList = args
+		dependeesList = {}
+		--find packages which depend on the packages we are removing.
+		for pName, pData in pairs(package.list) do
+			if not packageList[pName] then
+				for dName in pairs(pData.dependencies) do
+					for _, packName in pairs(packageList) do
+						if packName == dName then
+							dependeesList[pName] = true
+							break
+						end
+					end
+					if dependeesList[pName] then
+						break
+					end
+				end
+			end
+		end
+		local removeString = ""
+		local dependeesString = ""
+		for i = 1, #packageList do
+			removeString = removeString..packageList[i].." "
+			if dependeesList[packageList[i]] then
+				dependeesList[packageList[i]] = nil
+			end
+		end
+		for dName in pairs(dependeesList) do
+			dependeesString = dependeesString..dName.." "
+		end
+		if #removeString > 0 then
+			print("The following packages will be removed: "..removeString)
+			if #dependeesString > 0 then
+				print("The following packages will also be removed due to missing dependencies: "..dependeesString)
+			end
+			print("Continue? (y/N)")
+			local input = read()
+			if string.sub(input:lower(), 1, 1) == "y" then
+				for _, pName in pairs(packageList) do
+					removePackage(pName)
+				end
+				for pName in pairs(dependeesList) do
+					removePackage(pName)
+				end
+			else
+				return true
+			end
+		else
+			print("Nothing to do!")
 		end
 	end
 elseif mode == "fetch" then
@@ -369,11 +246,16 @@ elseif mode == "fetch" then
 		if fileHandle then
 			fileHandle:write(remoteHandle.readAll())
 			fileHandle:close()
+			os.unloadAPI("package")
+			if not os.loadAPI("package") then printError("Could not reload package API") end
 		else
 			printError("Could not open file /usr/repolist")
 		end
 	else
 		printError("Could not retrieve remote file: repolist")
+	end
+	while args[1] == "fetch" do
+		table.remove(args, 1)
 	end
 	if #args > 0 then
 		local fileHandle = io.open(shell.getRunningProgram(), "r")
@@ -390,7 +272,87 @@ elseif mode == "fetch" then
 		end
 	end
 elseif mode == "interactive" then
-	--interactive mode
+	package.printInformation = function() end
+	package.printWarning = function() end
+	package.printError = error
+	local state = ""
+	local search = ""
+	local searchResults = {}
+	local alphaList = {}
+	local pListIndex, pListOffset = 1, 1
+	local columnX = math.max(math.floor((term.getSize()) / 3), 2)
+	local isColor = term.isColor()
+
+	for name in pairs(package.list) do
+		table.insert(alphaList, name)
+	end
+	table.sort(alphaList)
+
+	local function drawTop()
+		if process and process.id() then
+			--set window caption
+		else
+			term.setBackgroundColor(colors.white)
+			term.setTextColor(colors.black)
+			local start = " PackMan"
+			if #state > 0 then
+				start = start.." - "..state
+			end
+			local x = term.getSize()
+			start = start..string.rep(" ", x - #start)
+			term.write(start)
+			term.setCursorPos(1, 2)
+		end
+	end
+
+	local function drawCategoryList()
+		local _, yOff = term.getCursorPos()
+		local x, y = term.getSize()
+		for n, name in pairs(categorySorted) do
+			local currY = n + yOff - 1
+			if currY > y then break end
+			term.setCursorPos(1, currY)
+			local line = string.sub(name, 1, columnX - 1)
+			if mode == state then
+				term.setTextColor(isColor and colors.white or colors.black)
+				term.setBackgroundColor(isColor and colors.blue or colors.white)
+			else
+				term.setTextColor(colors.white)
+				term.setBackgroundColor(isColor and colors.grey or colors.black)
+			end
+			term.write(line)
+			term.setTextColor(colors.white)
+			term.setBackgroundColor(isColor and colors.lightGrey or colors.black)
+			term.setCursorPos(columnX, currY)
+			term.write(isColor and " " or "|")
+		end
+		term.setCursorPos(columnX + 1, yOff)
+	end
+
+	local function drawPackageList()
+		local function writePackageLine(packName)
+			--
+		end
+
+		if state == "search" then
+			--from search results
+			for _, name in pairs(searchResults) do
+				writePackageLine(name)
+			end
+		elseif #state > 0 then
+			--use the selected category name
+		end
+	end
+
+	local function draw()
+		term.clear()
+		drawTop()
+		drawCategoryList()
+	end
+
+	while true do
+		draw()
+	end
 end
 
 --[[

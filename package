@@ -1,0 +1,374 @@
+installed = {}
+
+printError = error
+printWarning = function() end
+printInformation = function() end
+
+--build installed packages list from saved database.
+if fs.exists(".instPacks") then
+	local dbHandle = io.open(".instPacks", "r")
+	if dbHandle then
+		local package = ""
+		local entryTable
+		for line in dbHandle:lines() do
+			if string.match(line, "(=)") then
+				--new entry table time
+				if entryTable then
+					if not installed[entryTable.name] then
+						installed[entryTable.name] = entryTable
+					else
+						printError("Database is corrupt!")
+					end
+				end
+				entryTable = {files = {}}
+				entryTable.name, entryTable.version = string.match(line, "(.-)=(.*)")
+			else
+				table.insert(entryTable.files, line)
+			end
+		end
+		--catch final entry table.
+		if entryTable and entryTable.name then
+			if not installed[entryTable.name] then
+				installed[entryTable.name] = entryTable
+			else
+				printError("Database is corrupt!")
+			end
+		end
+		dbHandle:close()
+	end
+end
+
+function updateDatabase(packageName, packageVersion, fileTable)
+	installed[packageName] = {
+		name = packageName,
+		version = packageVersion,
+		files = {}
+	}
+	for i = 1, #fileTable do
+		installed[packageName].files[i] = fileTable[i]
+	end
+end
+
+function writeDatabase()
+	local dbHandle = io.open(".instPacks", "w")
+	for _, package in pairs(installed) do
+		dbHandle:write(package.name.."="..package.version.."\n")
+		for i = 1, #package.files do
+			dbHandle:write(package.files[i].."\n")
+		end
+	end
+	dbHandle:close()
+end
+
+local packAPI = {
+	pathList = {}
+}
+
+function packAPI.addFile(path)
+	table.insert(packAPI.pathList, path)
+end
+
+function packAPI.removeFile(path)
+	for i = #packAPI.pathList, 1, -1 do
+		if packAPI.pathList[i] == path then
+			table.remove(packAPI.pathList, i)
+		end
+	end
+end
+
+local scriptEnv = {packman = packAPI, shell = shell}
+setmetatable(scriptEnv, {__index = _G})
+
+local downloadTypes = {
+	github = {
+		author = true,
+		repository = true,
+	},
+	bitbucket = {
+		author = true,
+		repository = true,
+	},
+	pastebin = {
+		url = true,
+		filename = true,
+	},
+	raw = {
+		url = true,
+		filename = true,
+	},
+}
+
+local downloadFunctions = {}
+
+downloadFunctions.raw = function(url, path)
+	if type(url) == "table" then
+		local package = url
+		url = package.url
+		path = fs.combine(package.target, package.filename)
+	end
+	printInformation("Fetching: "..url)
+	http.request(url)
+	while true do
+		event, url, sourceText = os.pullEvent()
+		if event == "http_success" then
+			if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
+				fs.makeDir(string.match(path, "(.-)/[^/]+$"))
+				packAPI.addFile(string.match(path, "(.-)/[^/]+$"))
+			end
+			local fileHandle = io.open(path, "w")
+			if fileHandle then
+				fileHandle:write(sourceText.readAll())
+				fileHandle:close()
+				packAPI.addFile(path)
+			else
+				printWarning("Unable to open file "..path)
+			end
+			printInformation("Done!")
+			return true
+		else
+			printWarning("Unable to fetch file "..url)
+			return false
+		end
+	end
+end
+
+downloadFunctions.github = function(package)
+	local function getDirectoryContents(path)
+		local fType, fPath = {}, {}
+		local response = http.get("https://api.github.com/repos/"..package.author.."/"..package.repository.."/contents/"..path)
+		if response then
+			response = response.readAll()
+			if response ~= nil then
+				for str in response:gmatch('"type":%s*"(%w+)",') do table.insert(fType, str) end
+				for str in response:gmatch('"path":%s*"([^\"]+)",') do table.insert(fPath, str) end
+			end
+		else
+			printWarning("Can't fetch repository information")
+			return nil
+		end
+		local directoryContents = {}
+		for i=1, #fType do
+			directoryContents[i] = {type = fType[i], path = fPath[i]}
+		end
+		return directoryContents
+	end
+	local function addDirectoryContents(path, contentsTable)
+		local contents = getDirectoryContents(path)
+		if not contents then return nil, "no contents" end
+		for n, file in ipairs(contents) do
+			if file.type == "dir" then
+				addDirectoryContents(file.path, contentsTable)
+			else
+				table.insert(contentsTable, file.path)
+			end
+		end
+		return contentsTable
+	end
+	local contents = addDirectoryContents("", {})
+	if not contents then return nil, "content fetch failure" end
+	local localTarget = package.target or ""
+	for num, fileName in ipairs(contents) do
+		if not downloadFunctions.raw("https://raw.github.com/"..package.author.."/"..package.repository.."/master/"..fileName, fs.combine(localTarget, fileName)) then return false end
+	end
+	return true
+end
+
+downloadFunctions.bitbucket = function(package)
+	local function getDirectoryContents(path)
+		local directoryContents = {}
+		local response = http.get("https://api.bitbucket.org/1.0/repositories/"..package.author.."/"..package.repository.."/src/default"..path)
+		if response then
+			response = response.readAll()
+			if response ~= nil then
+				for str in string.gmatch(string.match(response, '"directories": %[(.-)%]'), '"([^,\"]+)"') do table.insert(directoryContents, {type = "dir", path = str}) end
+				for str in string.gmatch(string.match(response, '"files": %[(.-)%]'), '"path": "([^\"]+)"') do table.insert(directoryContents, {type = "file", path = str}) end
+			end
+		else
+			printWarning("Can't fetch repository information")
+			return nil
+		end
+		return directoryContents
+	end
+	local function addDirectoryContents(path, contentsTable)
+		local contents = getDirectoryContents(path)
+		for n, file in ipairs(contents) do
+			if file.type == "dir" then
+				addDirectoryContents(path..file.path.."/", contentsTable)
+			else
+				table.insert(contentsTable, file.path)
+			end
+		end
+		return contentsTable
+	end
+	local contents = addDirectoryContents("/", {})
+	local localTarget = package.target or ""
+	for num, fileName in ipairs(contents) do
+		if not downloadFunctions.raw("https://bitbucket.org/"..package.author.."/"..package.repository.."/raw/default/"..fileName, fs.combine(localTarget, fileName)) then return false end
+	end
+	return true
+end
+
+downloadFunctions.pastebin = function(package)
+	return downloadFunctions.raw("http://pastebin.com/raw.php?i="..package.url, fs.combine(package.target, package.filename))
+end
+
+--construct package table.
+list = {}
+
+do
+	local state = ""
+	local listHandle = io.open("/usr/repolist", "r")
+	local entryTable
+	local lineCount = 1
+	if listHandle then
+		for line in listHandle:lines() do
+			if state == "type" then
+				local allAttributes = true
+				for attribute in pairs(downloadTypes[entryTable.type]) do
+					if not entryTable[attribute] then
+						allAttributes = false
+						break
+					end
+				end
+				if allAttributes then
+					state = "main"
+				end
+			end
+			local property = string.match(line, "^%s*(%S*)")
+			if property == "name" and state == "" then
+				if state == "" then
+					entryTable = {name = string.lower(string.match(line, "^%s*name%s*=%s*(%S*)"))}
+					state = "main"
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected 'name' at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "type" then
+				if state == "main" then
+					entryTable.type = string.match(line, "^%s*type%s*=%s*(%S*)")
+					if downloadFunctions[entryTable.type] then
+						state = "type"
+					else
+						if state ~= "dirty" then
+							printWarning("Unknown Repository Format at line "..lineCount)
+							state = "dirty"
+						end
+					end
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected 'type' at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "category" or property == "target" or property == "setup" or property == "update" or property == "remove" or property == "version" or property == "size" then
+				if state == "main" then
+					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected "..property.." at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "dependencies" then
+				if state == "main" then
+					entryTable.dependencies = {}
+					for packName in string.gmatch(string.match(line, "^%s*"..property.."%s*=%s*(.*)"), "(%S+)") do
+						entryTable.dependencies[packName] = true
+					end
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected dependencies at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "end" then
+				if state == "dirty" then
+					state = ""
+				elseif state == "type" then
+					printWarning("Unexpected end at line "..lineCount)
+					state = ""
+				elseif state == "main" then
+					--this line is the required entries for a valid repolist entry.
+					if entryTable.dependencies and entryTable.type and entryTable.category and entryTable.version and entryTable.size then
+						if not entryTable.target then entryTable.target = "" end
+						list[entryTable.name] = entryTable
+					else
+						entryTable = nil
+					end
+					state = ""
+				end
+			elseif state == "type" then
+				local propertyFound = false
+				for prop in pairs(downloadTypes[entryTable.type]) do
+					if property == prop then
+						propertyFound = true
+						break
+					end
+				end
+				if propertyFound then
+					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
+				else
+					printWarning("Unexpected "..property.." at line "..lineCount)
+					state = "dirty"
+				end
+			end
+			lineCount = lineCount + 1
+		end
+		if state ~= "" then
+			printWarning("Expected 'end' at line "..lineCount)
+		end
+		listHandle:close()
+	else
+		printError("Could not open repository list!")
+	end
+end
+
+function install(packageName)
+	local package = packageTable[packageName]
+	if downloadFunctions[package.type] then
+		if not downloadFunctions[package.type](package) then return false end
+	end
+	if package.setup then
+		local setupTable = {}
+		for match in string.gmatch(package.setup, "(%S+)") do
+			table.insert(setupTable, match)
+		end
+		local programPath = fs.combine(package.target, table.remove(setupTable, 1))
+		os.run(scriptEnv, programPath, unpack(setupTable))
+		--record and reset the API's internal path list for subsequent package use.
+		packAPI.pathList = {}
+		resetScreen()
+	end
+	updateDatabase(packageName, packageTable[packageName].version, packAPI.pathList)
+	writeDatabase()
+	return true
+end
+
+function remove(packageName)
+	local package = packageTable[packageName]
+	if package.remove then
+		local removeTable = {}
+		for match in string.gmatch(package.remove, "(%S+)") do
+			table.insert(removeTable, match)
+		end
+		local programPath = fs.combine(package.target, table.remove(setupTable, 1))
+		os.run(scriptEnv, programPath, unpack(setupTable))
+	end
+	local fileList = installedPackages[packageName].files
+	for i = 1, #fileList do
+		if fs.exists(fileList[i]) then
+			if fs.isDir(fileList[i]) then
+				if #fs.list(fileList[i]) == 0 then
+					fs.delete(fileList[i])
+				end
+			else
+				fs.delete(fileList[i])
+			end
+		end
+	end
+	--remove package from list of installed packages.
+	installedPackages[packageName] = nil
+	writeDatabase()
+end
