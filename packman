@@ -292,6 +292,7 @@ elseif mode == "interactive" then
 		if process and process.id() then
 			--set window caption
 		else
+			term.setCursorPos(1, 1)
 			term.setBackgroundColor(colors.white)
 			term.setTextColor(colors.black)
 			local start = " PackMan"
@@ -352,6 +353,7 @@ elseif mode == "interactive" then
 
 	while true do
 		draw()
+		break
 	end
 end
 

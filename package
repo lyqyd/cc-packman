@@ -1,7 +1,7 @@
 installed = {}
 
 printError = error
-printWarning = function() end
+printWarning =  function() end
 printInformation = function() end
 
 --build installed packages list from saved database.
@@ -17,7 +17,7 @@ if fs.exists(".instPacks") then
 					if not installed[entryTable.name] then
 						installed[entryTable.name] = entryTable
 					else
-						printError("Database is corrupt!")
+						package.printError("Database is corrupt!")
 					end
 				end
 				entryTable = {files = {}}
@@ -31,7 +31,7 @@ if fs.exists(".instPacks") then
 			if not installed[entryTable.name] then
 				installed[entryTable.name] = entryTable
 			else
-				printError("Database is corrupt!")
+				package.printError("Database is corrupt!")
 			end
 		end
 		dbHandle:close()
@@ -106,7 +106,7 @@ downloadFunctions.raw = function(url, path)
 		url = package.url
 		path = fs.combine(package.target, package.filename)
 	end
-	printInformation("Fetching: "..url)
+	package.printInformation("Fetching: "..url)
 	http.request(url)
 	while true do
 		event, url, sourceText = os.pullEvent()
@@ -121,12 +121,12 @@ downloadFunctions.raw = function(url, path)
 				fileHandle:close()
 				packAPI.addFile(path)
 			else
-				printWarning("Unable to open file "..path)
+				package.printWarning("Unable to open file "..path)
 			end
-			printInformation("Done!")
+			package.printInformation("Done!")
 			return true
 		else
-			printWarning("Unable to fetch file "..url)
+			package.printWarning("Unable to fetch file "..url)
 			return false
 		end
 	end
@@ -143,7 +143,7 @@ downloadFunctions.github = function(package)
 				for str in response:gmatch('"path":%s*"([^\"]+)",') do table.insert(fPath, str) end
 			end
 		else
-			printWarning("Can't fetch repository information")
+			package.printWarning("Can't fetch repository information")
 			return nil
 		end
 		local directoryContents = {}
@@ -184,7 +184,7 @@ downloadFunctions.bitbucket = function(package)
 				for str in string.gmatch(string.match(response, '"files": %[(.-)%]'), '"path": "([^\"]+)"') do table.insert(directoryContents, {type = "file", path = str}) end
 			end
 		else
-			printWarning("Can't fetch repository information")
+			package.printWarning("Can't fetch repository information")
 			return nil
 		end
 		return directoryContents
@@ -241,7 +241,7 @@ do
 					state = "main"
 				else
 					if state ~= "dirty" then
-						printWarning("Unexpected 'name' at line "..lineCount)
+						package.printWarning("Unexpected 'name' at line "..lineCount)
 						state = "dirty"
 					end
 				end
@@ -252,13 +252,13 @@ do
 						state = "type"
 					else
 						if state ~= "dirty" then
-							printWarning("Unknown Repository Format at line "..lineCount)
+							package.printWarning("Unknown Repository Format at line "..lineCount)
 							state = "dirty"
 						end
 					end
 				else
 					if state ~= "dirty" then
-						printWarning("Unexpected 'type' at line "..lineCount)
+						package.printWarning("Unexpected 'type' at line "..lineCount)
 						state = "dirty"
 					end
 				end
@@ -267,7 +267,7 @@ do
 					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
 				else
 					if state ~= "dirty" then
-						printWarning("Unexpected "..property.." at line "..lineCount)
+						package.printWarning("Unexpected "..property.." at line "..lineCount)
 						state = "dirty"
 					end
 				end
@@ -279,7 +279,7 @@ do
 					end
 				else
 					if state ~= "dirty" then
-						printWarning("Unexpected dependencies at line "..lineCount)
+						package.printWarning("Unexpected dependencies at line "..lineCount)
 						state = "dirty"
 					end
 				end
@@ -287,7 +287,7 @@ do
 				if state == "dirty" then
 					state = ""
 				elseif state == "type" then
-					printWarning("Unexpected end at line "..lineCount)
+					package.printWarning("Unexpected end at line "..lineCount)
 					state = ""
 				elseif state == "main" then
 					--this line is the required entries for a valid repolist entry.
@@ -310,23 +310,23 @@ do
 				if propertyFound then
 					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
 				else
-					printWarning("Unexpected "..property.." at line "..lineCount)
+					package.printWarning("Unexpected "..property.." at line "..lineCount)
 					state = "dirty"
 				end
 			end
 			lineCount = lineCount + 1
 		end
 		if state ~= "" then
-			printWarning("Expected 'end' at line "..lineCount)
+			package.printWarning("Expected 'end' at line "..lineCount)
 		end
 		listHandle:close()
 	else
-		printError("Could not open repository list!")
+		package.printError("Could not open repository list!")
 	end
 end
 
 function install(packageName)
-	local package = packageTable[packageName]
+	local package = list[packageName]
 	if downloadFunctions[package.type] then
 		if not downloadFunctions[package.type](package) then return false end
 	end
@@ -341,13 +341,13 @@ function install(packageName)
 		packAPI.pathList = {}
 		resetScreen()
 	end
-	updateDatabase(packageName, packageTable[packageName].version, packAPI.pathList)
+	updateDatabase(packageName, list[packageName].version, packAPI.pathList)
 	writeDatabase()
 	return true
 end
 
 function remove(packageName)
-	local package = packageTable[packageName]
+	local package = list[packageName]
 	if package.remove then
 		local removeTable = {}
 		for match in string.gmatch(package.remove, "(%S+)") do
