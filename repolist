@@ -17,6 +17,7 @@ name = LyqydNet
 		repository = ComputerCraft-LyqydNet
 	category = networking rednet api
 	dependencies = none
+	target = /usr
 	version = 1.4
 	size = 31874
 end
@@ -27,7 +28,7 @@ name = location-api
 		filename = location
 	category = turtle api
 	dependencies = none
-	target = /apis
+	target = /usr/apis
 	version = 0.2
 	size = 2671
 end

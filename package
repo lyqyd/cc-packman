@@ -5,8 +5,8 @@ printWarning =  function() end
 printInformation = function() end
 
 --build installed packages list from saved database.
-if fs.exists(".instPacks") then
-	local dbHandle = io.open(".instPacks", "r")
+if fs.exists("/etc/.instPacks") then
+	local dbHandle = io.open("/etc/.instPacks", "r")
 	if dbHandle then
 		local package = ""
 		local entryTable
@@ -50,7 +50,7 @@ function updateDatabase(packageName, packageVersion, fileTable)
 end
 
 function writeDatabase()
-	local dbHandle = io.open(".instPacks", "w")
+	local dbHandle = io.open("/etc/.instPacks", "w")
 	for _, package in pairs(installed) do
 		dbHandle:write(package.name.."="..package.version.."\n")
 		for i = 1, #package.files do
@@ -102,9 +102,9 @@ local downloadFunctions = {}
 
 downloadFunctions.raw = function(url, path)
 	if type(url) == "table" then
-		local package = url
-		url = package.url
-		path = fs.combine(package.target, package.filename)
+		local pack = url
+		url = pack.url
+		path = fs.combine(pack.target, pack.filename)
 	end
 	package.printInformation("Fetching: "..url)
 	http.request(url)
@@ -125,7 +125,7 @@ downloadFunctions.raw = function(url, path)
 			end
 			package.printInformation("Done!")
 			return true
-		else
+		elseif event == "http_failure" then
 			package.printWarning("Unable to fetch file "..url)
 			return false
 		end
@@ -216,8 +216,9 @@ end
 list = {}
 
 do
+	if not fs.exists("/usr/bin") then fs.makeDir("/usr/bin") end
 	local state = ""
-	local listHandle = io.open("/usr/repolist", "r")
+	local listHandle = io.open("/etc/repolist", "r")
 	local entryTable
 	local lineCount = 1
 	if listHandle then
@@ -237,7 +238,7 @@ do
 			local property = string.match(line, "^%s*(%S*)")
 			if property == "name" and state == "" then
 				if state == "" then
-					entryTable = {name = string.lower(string.match(line, "^%s*name%s*=%s*(%S*)"))}
+					entryTable = {name = string.lower(string.match(line, "^%s*name%s*=%s*(%S*)")), target = "/usr/bin"}
 					state = "main"
 				else
 					if state ~= "dirty" then
@@ -326,16 +327,16 @@ do
 end
 
 function install(packageName)
-	local package = list[packageName]
-	if downloadFunctions[package.type] then
-		if not downloadFunctions[package.type](package) then return false end
+	local pack = package.list[packageName]
+	if downloadFunctions[pack.type] then
+		if not downloadFunctions[pack.type](pack) then return false end
 	end
-	if package.setup then
+	if pack.setup then
 		local setupTable = {}
-		for match in string.gmatch(package.setup, "(%S+)") do
+		for match in string.gmatch(pack.setup, "(%S+)") do
 			table.insert(setupTable, match)
 		end
-		local programPath = fs.combine(package.target, table.remove(setupTable, 1))
+		local programPath = fs.combine(pack.target, table.remove(setupTable, 1))
 		os.run(scriptEnv, programPath, unpack(setupTable))
 		--record and reset the API's internal path list for subsequent package use.
 		packAPI.pathList = {}
@@ -347,16 +348,16 @@ function install(packageName)
 end
 
 function remove(packageName)
-	local package = list[packageName]
-	if package.remove then
+	local pack = package.list[packageName]
+	if pack.remove then
 		local removeTable = {}
-		for match in string.gmatch(package.remove, "(%S+)") do
+		for match in string.gmatch(pack.remove, "(%S+)") do
 			table.insert(removeTable, match)
 		end
-		local programPath = fs.combine(package.target, table.remove(setupTable, 1))
+		local programPath = fs.combine(pack.target, table.remove(setupTable, 1))
 		os.run(scriptEnv, programPath, unpack(setupTable))
 	end
-	local fileList = installedPackages[packageName].files
+	local fileList = package.installed[packageName].files
 	for i = 1, #fileList do
 		if fs.exists(fileList[i]) then
 			if fs.isDir(fileList[i]) then
@@ -369,6 +370,22 @@ function remove(packageName)
 		end
 	end
 	--remove package from list of installed packages.
-	installedPackages[packageName] = nil
+	package.installed[packageName] = nil
 	writeDatabase()
+end
+
+function findDependencies(packageName, _dependencyTable)
+	local dependencyTable = _dependencyTable or {}
+	if package.list[packageName] then
+		dependencyTable[packageName] = true
+		for packName in pairs(package.list[packageName].dependencies) do
+			if packName ~= "none" and not dependencyTable[packName] then
+				dependencyTable, errmsg = package.findDependencies(packName, dependencyTable)
+				if not dependencyTable then return nil, errmsg end
+			end
+		end
+	else
+		return nil, packageName
+	end
+	return dependencyTable
 end
