@@ -254,7 +254,7 @@ elseif mode == "fetch" then
 	print("Updating Installer")
 	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
 	if remoteHandle then
-		fileHandle = io.open(shell.getRunningProgram(), "w")
+		local fileHandle = io.open(shell.getRunningProgram(), "w")
 		if fileHandle then
 			fileHandle:write(remoteHandle.readAll())
 			fileHandle:close()
@@ -268,15 +268,41 @@ elseif mode == "fetch" then
 	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
 	if remoteHandle then
 		if not fs.exists("/etc") then fs.makeDir("/etc") end
-		fileHandle = io.open("/etc/repolist", "w")
+		local fileHandle = io.open("/etc/repolist", "w")
 		if fileHandle then
 			fileHandle:write(remoteHandle.readAll())
 			fileHandle:close()
+			if not fs.exists("/etc/repositories") then fs.makeDir("/etc/repositories") end
+			local handle = io.open("/etc/repolist", "r")
+			if handle then
+				for line in handle:lines() do
+					local file, url = string.match(line, "^(%S*)%s*(.*)")
+					if file and url then
+						print("Fetching Repository: "..file)
+						local remoteHandle = http.get(url)
+						if remoteHandle then
+							local fileHandle = io.open(fs.combine("/etc/repositories", file), "w")
+							if fileHandle then
+								fileHandle:write(remoteHandle:readAll())
+								fileHandle:close()
+							else
+								printWarning("Could not write file: "..fs.combine("/etc/repositories", file))
+							end
+							remoteHandle.close()
+						else
+							printWarning("Could not retrieve remote file: "..file)
+						end
+					end
+				end
+			else
+				printError("Failed to open repository list")
+			end
 			os.unloadAPI("package")
 			if not os.loadAPI("package") then printError("Could not reload package API") end
 		else
-			printError("Could not open file /etc/repolist")
+			printError("Could not write file: /etc/repolist")
 		end
+		remoteHandle.close()
 	else
 		printError("Could not retrieve remote file: repolist")
 	end
