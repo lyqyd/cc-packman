@@ -64,12 +64,12 @@ local categorySorted = {}
 
 if args[1] ~= "fetch" then
 	for n, v in pairs(package.list) do
-		for str in string.gmatch(v.category, "(%S+)") do
-			if not categoryList[str] then
-				categoryList[str] = {[n] = true}
-				table.insert(categorySorted, str)
+		for category in pairs(v.category) do
+			if not categoryList[category] then
+				categoryList[category] = {[n] = true}
+				table.insert(categorySorted, category)
 			else
-				categoryList[str][n] = true
+				categoryList[category][n] = true
 			end
 		end
 	end
