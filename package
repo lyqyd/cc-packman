@@ -314,11 +314,11 @@ function findDependencies(packageName, _dependencyTable)
 	return dependencyTable
 end
 
+if not fs.exists("/usr/bin") then fs.makeDir("/usr/bin") end
 --process package list
-do
-	if not fs.exists("/usr/bin") then fs.makeDir("/usr/bin") end
+local function addPacks(file)
 	local state = ""
-	local listHandle = io.open("/etc/packlist", "r")
+	local listHandle = io.open(file, "r")
 	local entryTable
 	local lineCount = 1
 	if listHandle then
@@ -343,7 +343,7 @@ do
 					state = "main"
 				else
 					if state ~= "dirty" then
-						printWarning("Unexpected 'name' at line "..lineCount)
+						printWarning("Unexpected 'name' at line "..lineCount.." in "..file)
 						state = "dirty"
 					end
 				end
@@ -354,13 +354,13 @@ do
 						state = "type"
 					else
 						if state ~= "dirty" then
-							printWarning("Unknown Repository Format at line "..lineCount)
+							printWarning("Unknown Repository Format at line "..lineCount.." in "..file)
 							state = "dirty"
 						end
 					end
 				else
 					if state ~= "dirty" then
-						printWarning("Unexpected 'type' at line "..lineCount)
+						printWarning("Unexpected 'type' at line "..lineCount.." in "..file)
 						state = "dirty"
 					end
 				end
@@ -369,7 +369,7 @@ do
 					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
 				else
 					if state ~= "dirty" then
-						printWarning("Unexpected "..property.." at line "..lineCount)
+						printWarning("Unexpected "..property.." at line "..lineCount.." in "..file)
 						state = "dirty"
 					end
 				end
@@ -380,7 +380,7 @@ do
 					end
 				else
 					if state ~= "dirty" then
-						printWarning("Unexpected "..property.." at line "..lineCount)
+						printWarning("Unexpected "..property.." at line "..lineCount.." in "..file)
 						state = "dirty"
 					end
 				end
@@ -388,7 +388,7 @@ do
 				if state == "dirty" then
 					state = ""
 				elseif state == "type" then
-					printWarning("Unexpected end at line "..lineCount)
+					printWarning("Unexpected end at line "..lineCount.." in "..file)
 					state = ""
 				elseif state == "main" then
 					--this line is the required entries for a valid repolist entry.
@@ -417,17 +417,21 @@ do
 				if propertyFound then
 					entryTable.download[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
 				else
-					printWarning("Unexpected "..property.." at line "..lineCount)
+					printWarning("Unexpected "..property.." at line "..lineCount.." in "..file)
 					state = "dirty"
 				end
 			end
 			lineCount = lineCount + 1
 		end
 		if state ~= "" then
-			printWarning("Expected 'end' at line "..lineCount)
+			printWarning("Expected 'end' at line "..lineCount.." in "..file)
 		end
 		listHandle:close()
 	else
 		printError("Could not open repository list!")
 	end
+end
+
+for _, file in ipairs(fs.list("/etc/repositories")) do
+	addPacks(fs.combine("/etc/repositories", file))
 end
