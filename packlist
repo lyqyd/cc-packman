@@ -1,0 +1,55 @@
+name = LyqydOS
+	type = github
+		author = lyqyd
+		repository = LyqydOS
+	category = os
+	setup = installer setup
+	remove = installer remove
+	dependencies = framebuffer
+	target = /LyqydOS
+	version = 0.9
+	size = 66707
+end
+
+name = LyqydNet
+	type = github
+		author = lyqyd
+		repository = ComputerCraft-LyqydNet
+	category = networking rednet api
+	dependencies = none
+	target = /usr
+	version = 1.4
+	size = 31874
+end
+
+name = location-api
+	type = raw
+		url = https://raw.github.com/lyqyd/LyqydNet-Programs/master/apis/location
+		filename = location
+	category = turtle api
+	dependencies = none
+	target = /usr/apis
+	version = 0.2
+	size = 2671
+end
+
+name = nsh
+	type = github
+		author = lyqyd
+		repository = cc-netshell
+	category = rednet shell remote
+	dependencies = framebuffer
+	version = 0.6
+	size = 18854
+end
+
+name = framebuffer
+	type = pastebin
+		url = Aaza6h5v
+		filename = framebuffer
+	category = redirect buffer api
+	dependencies = none
+	target = /usr/apis
+	version = 0.2
+	size = 7382
+end
