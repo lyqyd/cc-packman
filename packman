@@ -4,9 +4,9 @@ if not package then os.loadAPI("package") end
 
 local args = {...}
 
-if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "interactive" and args[1] ~= "fetch") then
+if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "fetch" and args[1] ~= "force") then
 	print("Usage:")
-	print("packman <install|update|remove> <package name[s]>")
+	print("packman [force] <install|update|remove> <package name[s]>")
 	print("packman fetch")
 	return
 end
@@ -17,6 +17,7 @@ for i = 1, #args do
 end
 
 local mode = ""
+local forced = false
 
 function resetScreen()
 	term.clear()
@@ -122,6 +123,11 @@ end
 
 local mode = table.remove(args, 1)
 
+if mode == "force" then
+	forced = true
+	mode = table.remove(args, 1)
+end
+
 if mode == "install" then
 	if #args >= 1 then
 		local installList = {}
@@ -139,15 +145,16 @@ if mode == "install" then
 			installString = installString..k.." "
 		end
 		if #installString > 0 then
-			print("The following packages will be installed: "..installString)
-			print("Continue? (Y/n)")
-			local input = read()
-			if string.sub(input:lower(), 1, 1) == "n" then
-				return true
-			else
-				for packageName in pairs(installList) do
-					if not package.install(packageName) then printWarning("Could not "..mode.." package "..packageName) end
+			if not forced then
+				print("The following packages will be installed: "..installString)
+				print("Continue? (Y/n)")
+				local input = read()
+				if string.sub(input:lower(), 1, 1) == "n" then
+					return true
 				end
+			end
+			for packageName in pairs(installList) do
+				if not install(packageName) then printWarning("Could not "..mode.." package "..packageName) end
 			end
 		end
 	end
@@ -170,16 +177,16 @@ elseif mode == "update" then
 		for i = 1, #updateList do
 			updateString = updateString..updateList[i].." "
 		end
-		print("The following packages will be updated: "..updateString)
-		print("Continue? (Y/n)")
-		local input = read()
-		if string.sub(input:lower(), 1, 1) == "n" then
-			return true
-		else
-			for _, packageName in pairs(updateList) do
-				removePackage(packageName)
-				installPackage(packageName)
+		if not forced then
+			print("The following packages will be updated: "..updateString)
+			print("Continue? (Y/n)")
+			local input = read()
+			if string.sub(input:lower(), 1, 1) == "n" then
+				return true
 			end
+		end
+		for _, packageName in pairs(updateList) do
+			install(packageName)
 		end
 	else
 		print("Nothing to do!")
@@ -222,21 +229,22 @@ elseif mode == "remove" then
 			dependeesString = dependeesString..dName.." "
 		end
 		if #removeString > 0 then
-			print("The following packages will be removed: "..removeString)
-			if #dependeesString > 0 then
-				print("The following packages will also be removed due to missing dependencies: "..dependeesString)
+			if not forced then
+				print("The following packages will be removed: "..removeString)
+				if #dependeesString > 0 then
+					print("The following packages will also be removed due to missing dependencies: "..dependeesString)
+				end
+				print("Continue? (y/N)")
+				local input = read()
+				if string.sub(input:lower(), 1, 1) ~= "y" then
+					return true
+				end
 			end
-			print("Continue? (y/N)")
-			local input = read()
-			if string.sub(input:lower(), 1, 1) == "y" then
-				for _, pName in pairs(packageList) do
-					package.remove(pName)
-				end
-				for pName in pairs(dependeesList) do
-					package.remove(pName)
-				end
-			else
-				return true
+			for _, pName in pairs(packageList) do
+				remove(pName)
+			end
+			for pName in pairs(dependeesList) do
+				remove(pName)
 			end
 		else
 			print("Nothing to do!")
