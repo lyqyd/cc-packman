@@ -1,83 +1,25 @@
+list = {}
 installed = {}
 
-printError = error
-printWarning =  function() end
-printInformation = function() end
-
---build installed packages list from saved database.
-if fs.exists("/etc/.instPacks") then
-	local dbHandle = io.open("/etc/.instPacks", "r")
-	if dbHandle then
-		local package = ""
-		local entryTable
-		for line in dbHandle:lines() do
-			if string.match(line, "(=)") then
-				--new entry table time
-				if entryTable then
-					if not installed[entryTable.name] then
-						installed[entryTable.name] = entryTable
-					else
-						package.printError("Database is corrupt!")
-					end
-				end
-				entryTable = {files = {}}
-				entryTable.name, entryTable.version = string.match(line, "(.-)=(.*)")
-			else
-				table.insert(entryTable.files, line)
-			end
-		end
-		--catch final entry table.
-		if entryTable and entryTable.name then
-			if not installed[entryTable.name] then
-				installed[entryTable.name] = entryTable
-			else
-				package.printError("Database is corrupt!")
-			end
-		end
-		dbHandle:close()
+local function postStatus(type, text)
+	os.queueEvent("package_status", type, text)
+	while true do
+		local event = {os.pullEvent("package_status")}
+		if event[1] == "package_status" then break end
 	end
 end
 
-function updateDatabase(packageName, packageVersion, fileTable)
-	installed[packageName] = {
-		name = packageName,
-		version = packageVersion,
-		files = {}
-	}
-	for i = 1, #fileTable do
-		installed[packageName].files[i] = fileTable[i]
-	end
+local function printInformation(text)
+	postStatus("info", text)
 end
 
-function writeDatabase()
-	local dbHandle = io.open("/etc/.instPacks", "w")
-	for _, package in pairs(installed) do
-		dbHandle:write(package.name.."="..package.version.."\n")
-		for i = 1, #package.files do
-			dbHandle:write(package.files[i].."\n")
-		end
-	end
-	dbHandle:close()
+local function printWarning(text)
+	postStatus("warning", text)
 end
 
-local packAPI = {
-	pathList = {}
-}
-
-function packAPI.addFile(path)
-	table.insert(packAPI.pathList, path)
+local function printError(text)
+	postStatus("error", text)
 end
-
-function packAPI.removeFile(path)
-	for i = #packAPI.pathList, 1, -1 do
-		if packAPI.pathList[i] == path then
-			table.remove(packAPI.pathList, i)
-		end
-	end
-end
-
-local scriptEnv = {packman = packAPI, shell = shell}
-setmetatable(scriptEnv, {__index = _G})
 
 local downloadTypes = {
 	github = {
@@ -103,10 +45,10 @@ local downloadFunctions = {}
 downloadFunctions.raw = function(url, path)
 	if type(url) == "table" then
 		local pack = url
-		url = pack.url
-		path = fs.combine(pack.target, pack.filename)
+		url = pack.download.url
+		path = fs.combine(pack.target, pack.download.filename)
 	end
-	package.printInformation("Fetching: "..url)
+	printInformation("Fetching: "..url)
 	http.request(url)
 	while true do
 		event, url, sourceText = os.pullEvent()
@@ -121,12 +63,12 @@ downloadFunctions.raw = function(url, path)
 				fileHandle:close()
 				packAPI.addFile(path)
 			else
-				package.printWarning("Unable to open file "..path)
+				printWarning("Unable to open file "..path)
 			end
-			package.printInformation("Done!")
+			printInformation("Done!")
 			return true
 		elseif event == "http_failure" then
-			package.printWarning("Unable to fetch file "..url)
+			printWarning("Unable to fetch file "..url)
 			return false
 		end
 	end
@@ -135,7 +77,7 @@ end
 downloadFunctions.github = function(package)
 	local function getDirectoryContents(path)
 		local fType, fPath = {}, {}
-		local response = http.get("https://api.github.com/repos/"..package.author.."/"..package.repository.."/contents/"..path)
+		local response = http.get("https://api.github.com/repos/"..package.download.author.."/"..package.download.repository.."/contents/"..path)
 		if response then
 			response = response.readAll()
 			if response ~= nil then
@@ -143,7 +85,7 @@ downloadFunctions.github = function(package)
 				for str in response:gmatch('"path":%s*"([^\"]+)",') do table.insert(fPath, str) end
 			end
 		else
-			package.printWarning("Can't fetch repository information")
+			printWarning("Can't fetch repository information")
 			return nil
 		end
 		local directoryContents = {}
@@ -168,7 +110,7 @@ downloadFunctions.github = function(package)
 	if not contents then return nil, "content fetch failure" end
 	local localTarget = package.target or ""
 	for num, fileName in ipairs(contents) do
-		if not downloadFunctions.raw("https://raw.github.com/"..package.author.."/"..package.repository.."/master/"..fileName, fs.combine(localTarget, fileName)) then return false end
+		if not downloadFunctions.raw("https://raw.github.com/"..package.download.author.."/"..package.download.repository.."/master/"..fileName, fs.combine(localTarget, fileName)) then return false end
 	end
 	return true
 end
@@ -176,7 +118,7 @@ end
 downloadFunctions.bitbucket = function(package)
 	local function getDirectoryContents(path)
 		local directoryContents = {}
-		local response = http.get("https://api.bitbucket.org/1.0/repositories/"..package.author.."/"..package.repository.."/src/default"..path)
+		local response = http.get("https://api.bitbucket.org/1.0/repositories/"..package.download.author.."/"..package.download.repository.."/src/default"..path)
 		if response then
 			response = response.readAll()
 			if response ~= nil then
@@ -184,7 +126,7 @@ downloadFunctions.bitbucket = function(package)
 				for str in string.gmatch(string.match(response, '"files": %[(.-)%]'), '"path": "([^\"]+)"') do table.insert(directoryContents, {type = "file", path = str}) end
 			end
 		else
-			package.printWarning("Can't fetch repository information")
+			printWarning("Can't fetch repository information")
 			return nil
 		end
 		return directoryContents
@@ -203,175 +145,157 @@ downloadFunctions.bitbucket = function(package)
 	local contents = addDirectoryContents("/", {})
 	local localTarget = package.target or ""
 	for num, fileName in ipairs(contents) do
-		if not downloadFunctions.raw("https://bitbucket.org/"..package.author.."/"..package.repository.."/raw/default/"..fileName, fs.combine(localTarget, fileName)) then return false end
+		if not downloadFunctions.raw("https://bitbucket.org/"..package.download.author.."/"..package.download.repository.."/raw/default/"..fileName, fs.combine(localTarget, fileName)) then return false end
 	end
 	return true
 end
 
-downloadFunctions.pastebin = function(package)
-	return downloadFunctions.raw("http://pastebin.com/raw.php?i="..package.url, fs.combine(package.target, package.filename))
+downloadFunctions.pastebin = function(pack)
+	return downloadFunctions.raw("http://pastebin.com/raw.php?i="..pack.download.url, fs.combine(pack.target, pack.download.filename))
 end
 
---construct package table.
-list = {}
+if fs.exists("/etc/.installed") and fs.isDir("/etc/.installed") then
+	for _, file in ipairs(fs.list("/etc/.installed")) do
+		local handle = io.open(fs.combine("/etc/installed", file), "r")
+		if handle then
+			installed[file] = {name = file, files = {}}
+			for line in handle:lines() do
+				if installed[file].version then
+					table.insert(installed[file].files, line)
+				else
+					installed[file].version = line
+				end
+			end
+			handle:close()
+		end
+	end
+end
 
-do
-	if not fs.exists("/usr/bin") then fs.makeDir("/usr/bin") end
-	local state = ""
-	local listHandle = io.open("/etc/repolist", "r")
-	local entryTable
-	local lineCount = 1
-	if listHandle then
-		for line in listHandle:lines() do
-			if state == "type" then
-				local allAttributes = true
-				for attribute in pairs(downloadTypes[entryTable.type]) do
-					if not entryTable[attribute] then
-						allAttributes = false
-						break
-					end
-				end
-				if allAttributes then
-					state = "main"
-				end
+function updateDatabase(package, files)
+	installed[package.name] = {
+		name = package.name,
+		version = package.version,
+		files = {}
+	}
+	for i = 1, #files do
+		installed[package.name].files[i] = files[i]
+	end
+end
+
+function writeDatabase(package)
+	if package then
+		--update the entry of a specific package
+		name = type(package) == "table" and package.name or package
+		if installed[name] then
+			local handle = io.open(fs.combine("/etc/.installed", name), "w")
+			handle:write(installed[name].version.."\n")
+			for i = 1, #installed[name].files do
+				handle:write(installed[name].files[i].."\n")
 			end
-			local property = string.match(line, "^%s*(%S*)")
-			if property == "name" and state == "" then
-				if state == "" then
-					entryTable = {name = string.lower(string.match(line, "^%s*name%s*=%s*(%S*)")), target = "/usr/bin"}
-					state = "main"
-				else
-					if state ~= "dirty" then
-						package.printWarning("Unexpected 'name' at line "..lineCount)
-						state = "dirty"
-					end
-				end
-			elseif property == "type" then
-				if state == "main" then
-					entryTable.type = string.match(line, "^%s*type%s*=%s*(%S*)")
-					if downloadFunctions[entryTable.type] then
-						state = "type"
-					else
-						if state ~= "dirty" then
-							package.printWarning("Unknown Repository Format at line "..lineCount)
-							state = "dirty"
-						end
-					end
-				else
-					if state ~= "dirty" then
-						package.printWarning("Unexpected 'type' at line "..lineCount)
-						state = "dirty"
-					end
-				end
-			elseif property == "category" or property == "target" or property == "setup" or property == "update" or property == "remove" or property == "version" or property == "size" then
-				if state == "main" then
-					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
-				else
-					if state ~= "dirty" then
-						package.printWarning("Unexpected "..property.." at line "..lineCount)
-						state = "dirty"
-					end
-				end
-			elseif property == "dependencies" then
-				if state == "main" then
-					entryTable.dependencies = {}
-					for packName in string.gmatch(string.match(line, "^%s*"..property.."%s*=%s*(.*)"), "(%S+)") do
-						entryTable.dependencies[packName] = true
-					end
-				else
-					if state ~= "dirty" then
-						package.printWarning("Unexpected dependencies at line "..lineCount)
-						state = "dirty"
-					end
-				end
-			elseif property == "end" then
-				if state == "dirty" then
-					state = ""
-				elseif state == "type" then
-					package.printWarning("Unexpected end at line "..lineCount)
-					state = ""
-				elseif state == "main" then
-					--this line is the required entries for a valid repolist entry.
-					if entryTable.dependencies and entryTable.type and entryTable.category and entryTable.version and entryTable.size then
-						if not entryTable.target then entryTable.target = "" end
-						list[entryTable.name] = entryTable
-					else
-						entryTable = nil
-					end
-					state = ""
-				end
-			elseif state == "type" then
-				local propertyFound = false
-				for prop in pairs(downloadTypes[entryTable.type]) do
-					if property == prop then
-						propertyFound = true
-						break
-					end
-				end
-				if propertyFound then
-					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
-				else
-					package.printWarning("Unexpected "..property.." at line "..lineCount)
-					state = "dirty"
-				end
-			end
-			lineCount = lineCount + 1
+			handle:close()
+		else
+			fs.delete(fs.combine("/etc/.installed", name))
 		end
-		if state ~= "" then
-			package.printWarning("Expected 'end' at line "..lineCount)
-		end
-		listHandle:close()
 	else
-		package.printError("Could not open repository list!")
+		--write all the packages!
+		local packageNames = {}
+		--both installed
+		for packName in pairs(installed) do
+			packageNames[packName] = true
+		end
+		--and recently uninstalled
+		for _, file in pairs(fs.list("/etc/.installed")) do
+			packageNames[file] = true
+		end
+		for name in pairs(packageNames) do
+			writeDatabase(name)
+		end
 	end
 end
 
-function install(packageName)
-	local pack = package.list[packageName]
-	if downloadFunctions[pack.type] then
-		if not downloadFunctions[pack.type](pack) then return false end
-	end
-	if pack.setup then
-		local setupTable = {}
-		for match in string.gmatch(pack.setup, "(%S+)") do
-			table.insert(setupTable, match)
+local packAPI = {
+	pathList = {}
+}
+
+function packAPI.addFile(path)
+	table.insert(packAPI.pathList, path)
+end
+
+function packAPI.removeFile(path)
+	for i = #packAPI.pathList, 1, -1 do
+		if packAPI.pathList[i] == path then
+			table.remove(packAPI.pathList, i)
 		end
-		local programPath = fs.combine(pack.target, table.remove(setupTable, 1))
-		os.run(scriptEnv, programPath, unpack(setupTable))
-		--record and reset the API's internal path list for subsequent package use.
+	end
+end
+
+local scriptEnv = {packman = packAPI, shell = shell}
+setmetatable(scriptEnv, {__index = _G})
+
+local Package = {
+	install = function(self)
+		if downloadFunctions[self.download.type] then
+			if not downloadFunctions[self.download.type](self) then return false end
+		end
+		if #self.setupScript > 0 then
+			local setupTable = {}
+			for match in string.gmatch(self.setupScript, "(%S+)") do
+				table.insert(setupTable, match)
+			end
+			local programPath = fs.combine(self.target, table.remove(setupTable, 1))
+			os.run(scriptEnv, programPath, unpack(setupTable))		
+		end
+		updateDatabase(self, packAPI.pathList)
 		packAPI.pathList = {}
-		resetScreen()
-	end
-	updateDatabase(packageName, list[packageName].version, packAPI.pathList)
-	writeDatabase()
-	return true
-end
-
-function remove(packageName)
-	local pack = package.list[packageName]
-	if pack.remove then
-		local removeTable = {}
-		for match in string.gmatch(pack.remove, "(%S+)") do
-			table.insert(removeTable, match)
+		writeDatabase(self.name)
+		return true
+	end,
+	remove = function(self)
+		if not package.installed[self.name] then return false end
+		if self.removeScript then
+			local removeTable = {}
+			for match in string.gmatch(self.removeScript, "(%S+)") do
+				table.insert(removeTable, match)
+			end
+			local programPath = fs.combine(self.target, table.remove(setupTable, 1))
+			os.run(scriptEnv, programPath, unpack(setupTable))
 		end
-		local programPath = fs.combine(pack.target, table.remove(setupTable, 1))
-		os.run(scriptEnv, programPath, unpack(setupTable))
-	end
-	local fileList = package.installed[packageName].files
-	for i = 1, #fileList do
-		if fs.exists(fileList[i]) then
-			if fs.isDir(fileList[i]) then
-				if #fs.list(fileList[i]) == 0 then
+		local fileList = package.installed[packageName].files
+		for i = 1, #fileList do
+			if fs.exists(fileList[i]) then
+				if fs.isDir(fileList[i]) then
+					if #fs.list(fileList[i]) == 0 then
+						fs.delete(fileList[i])
+					end
+				else
 					fs.delete(fileList[i])
 				end
-			else
-				fs.delete(fileList[i])
 			end
 		end
-	end
-	--remove package from list of installed packages.
-	package.installed[packageName] = nil
-	writeDatabase()
+		package.installed[self.name] = nil
+		writeDatabase(self.name)
+	end,
+}
+
+local pmetatable = {__index = Package}
+
+function new(name)
+	local p = {
+		name = name,
+		version = "",
+		size = 0,
+		category = {},
+		dependencies = {},
+		--installation folder target
+		target = "/usr/bin",
+		setupScript = "",
+		removeScript = "",
+		download = {}
+	}
+
+	setmetatable(p, pmetatable)
+
+	return p
 end
 
 function findDependencies(packageName, _dependencyTable)
@@ -388,4 +312,122 @@ function findDependencies(packageName, _dependencyTable)
 		return nil, packageName
 	end
 	return dependencyTable
+end
+
+--process package list
+do
+	if not fs.exists("/usr/bin") then fs.makeDir("/usr/bin") end
+	local state = ""
+	local listHandle = io.open("/etc/packlist", "r")
+	local entryTable
+	local lineCount = 1
+	if listHandle then
+		for line in listHandle:lines() do
+			if state == "type" then
+				local allAttributes = true
+				for attribute in pairs(downloadTypes[entryTable.download.type]) do
+					if not entryTable.download[attribute] then
+						allAttributes = false
+						break
+					end
+				end
+				if allAttributes then
+					state = "main"
+				end
+			end
+			local property = string.match(line, "^%s*(%S*)")
+			if property == "name" and state == "" then
+				if state == "" then
+					entryTable = new(string.lower(string.match(line, "^%s*name%s*=%s*(%S*)")))
+					entryTable.target = "/usr/bin"
+					state = "main"
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected 'name' at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "type" then
+				if state == "main" then
+					entryTable.download.type = string.match(line, "^%s*type%s*=%s*(%S*)")
+					if downloadFunctions[entryTable.download.type] then
+						state = "type"
+					else
+						if state ~= "dirty" then
+							printWarning("Unknown Repository Format at line "..lineCount)
+							state = "dirty"
+						end
+					end
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected 'type' at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "target" or property == "setup" or property == "update" or property == "remove" or property == "version" or property == "size" then
+				if state == "main" then
+					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected "..property.." at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "dependencies" or property == "category" then
+				if state == "main" then
+					for str in string.gmatch(string.match(line, "^%s*"..property.."%s*=%s*(.*)"), "(%S+)") do
+						entryTable[property][str] = true
+					end
+				else
+					if state ~= "dirty" then
+						printWarning("Unexpected "..property.." at line "..lineCount)
+						state = "dirty"
+					end
+				end
+			elseif property == "end" then
+				if state == "dirty" then
+					state = ""
+				elseif state == "type" then
+					printWarning("Unexpected end at line "..lineCount)
+					state = ""
+				elseif state == "main" then
+					--this line is the required entries for a valid repolist entry.
+					if entryTable.download.type and #entryTable.version > 0 and tonumber(entryTable.size) > 0 then
+						local i
+						for name in pairs(entryTable.dependencies) do
+							i = true
+							break
+						end
+						if i then
+							list[entryTable.name] = entryTable
+						end
+					else
+						entryTable = nil
+					end
+					state = ""
+				end
+			elseif state == "type" then
+				local propertyFound = false
+				for prop in pairs(downloadTypes[entryTable.download.type]) do
+					if property == prop then
+						propertyFound = true
+						break
+					end
+				end
+				if propertyFound then
+					entryTable.download[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
+				else
+					printWarning("Unexpected "..property.." at line "..lineCount)
+					state = "dirty"
+				end
+			end
+			lineCount = lineCount + 1
+		end
+		if state ~= "" then
+			printWarning("Expected 'end' at line "..lineCount)
+		end
+		listHandle:close()
+	else
+		printError("Could not open repository list!")
+	end
 end
