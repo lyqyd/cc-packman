@@ -1,4 +1,4 @@
-local versionNumber = 1.1
+local versionNumber = 1.2
 
 if not package then os.loadAPI("package") end
 
