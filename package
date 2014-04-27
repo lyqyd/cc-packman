@@ -229,7 +229,7 @@ function packAPI.removeFile(path)
 	end
 end
 
-local scriptEnv = {packman = packAPI, shell = shell}
+local scriptEnv = {packman = packAPI}
 setmetatable(scriptEnv, {__index = _G})
 
 local Package = {
@@ -243,6 +243,7 @@ local Package = {
 				table.insert(setupTable, match)
 			end
 			local programPath = fs.combine(self.target, table.remove(setupTable, 1))
+			scriptEnv.shell = getfenv(2).shell
 			os.run(scriptEnv, programPath, unpack(setupTable))		
 		end
 		updateDatabase(self, packAPI.pathList)
@@ -258,6 +259,7 @@ local Package = {
 				table.insert(removeTable, match)
 			end
 			local programPath = fs.combine(self.target, table.remove(setupTable, 1))
+			scriptEnv.shell = getfenv(2).shell
 			os.run(scriptEnv, programPath, unpack(setupTable))
 		end
 		local fileList = package.installed[packageName].files
