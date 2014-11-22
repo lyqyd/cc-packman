@@ -7,7 +7,7 @@ name = LyqydOS
 	remove = installer remove
 	dependencies = framebuffer
 	target = /LyqydOS
-	version = 0.9
+	version = 1.0
 	size = 66707
 end
 
