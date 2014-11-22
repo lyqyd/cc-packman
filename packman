@@ -1,6 +1,6 @@
 local versionNumber = 1.2
 
-if not package then os.loadAPI("package") end
+if not package then os.loadAPI(shell.resolveProgram("package")) end
 
 local args = {...}
 
@@ -96,9 +96,12 @@ local function raw_package_operation(name, funcName)
 		if (filter and (filter == event[1] or event[1] == "terminate")) or not filter then
 			passback = {coroutine.resume(co, unpack(event))}
 		end
-		if coroutine.status(co) == "dead" then return unpack(passback, 2) end
+		if coroutine.status(co) == "dead" then printWarning(passback[2]) return unpack(passback, 2) end
+		filter = nil
 		if passback and passback[1] and passback[2] then
 			filter = passback[2]
+		elseif passback and passback[1] == false then
+			printError(passback[2])
 		end
 		event = {os.pullEventRaw()}
 		if event[1] == "package_status" then
@@ -136,7 +139,9 @@ if mode == "install" then
 				printWarning("Could not install package "..packageName..".")
 			else
 				for k,v in pairs(package.list[packageName].dependencies) do
-					installList[k] = true
+					if not package.installed[k] then
+						installList[k] = true
+					end
 				end
 			end
 		end
