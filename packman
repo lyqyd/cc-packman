@@ -157,7 +157,12 @@ if mode == "install" then
 				end
 			end
 			for packageName in pairs(installList) do
-				if not install(packageName) then printWarning("Could not "..mode.." package "..packageName) end
+				if not install(packageName) then
+					printWarning("Could not "..mode.." package "..packageName)
+				elseif package.list[packageName].setup then
+					--successfully installed, see if it has a setup script to run
+					shell.run(fs.combine(package.list[packageName].target, package.list[packageName].setup))
+				end
 			end
 		end
 	end
