@@ -8,7 +8,7 @@ name = LyqydOS
 	dependencies = framebuffer
 	target = /LyqydOS
 	version = 1.0
-	size = 66707
+	size = 152274
 end
 
 name = LyqydNet
