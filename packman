@@ -96,12 +96,10 @@ local function raw_package_operation(name, funcName)
 		if (filter and (filter == event[1] or event[1] == "terminate")) or not filter then
 			passback = {coroutine.resume(co, unpack(event))}
 		end
-		if coroutine.status(co) == "dead" then printWarning(passback[2]) return unpack(passback, 2) end
+		if coroutine.status(co) == "dead" then return unpack(passback, 2) end
 		filter = nil
 		if passback and passback[1] and passback[2] then
 			filter = passback[2]
-		elseif passback and passback[1] == false then
-			printError(passback[2])
 		end
 		event = {os.pullEventRaw()}
 		if event[1] == "package_status" then
@@ -303,7 +301,7 @@ elseif mode == "fetch" then
 				printError("Failed to open repository list")
 			end
 			os.unloadAPI("package")
-			if not os.loadAPI("package") then printError("Could not reload package API") end
+			if not os.loadAPI(shell.resolveProgram("package")) then printError("Could not reload package API") end
 		else
 			printError("Could not write file: /etc/repolist")
 		end
