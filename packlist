@@ -44,9 +44,9 @@ name = nsh
 end
 
 name = framebuffer
-	type = pastebin
-		url = Aaza6h5v
-		filename = framebuffer
+	type = github
+		author = lyqyd
+		repository = framebuffer
 	category = redirect buffer api
 	dependencies = none
 	target = /usr/apis
