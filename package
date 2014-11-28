@@ -5,13 +5,17 @@ local packAPI = {
 	pathList = {}
 }
 
-function packAPI.addFile(path)
-	table.insert(packAPI.pathList, path)
+function packAPI.addFile(path, version)
+	if version then
+		table.insert(packAPI.pathList, {path = path, version = version})
+	else
+		table.insert(packAPI.pathList, {path = path})
+	end
 end
 
 function packAPI.removeFile(path)
 	for i = #packAPI.pathList, 1, -1 do
-		if packAPI.pathList[i] == path then
+		if packAPI.pathList[i].path == path then
 			table.remove(packAPI.pathList, i)
 		end
 	end
@@ -56,9 +60,20 @@ local downloadTypes = {
 	},
 }
 
+local function createSingleFolder(path)
+	if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
+		createSingleFolder(string.match(path, "(.-)/[^/]+$"))
+		fs.makeDir(path)
+		packAPI.addFile(path)
+	else
+		fs.makeDir(path)
+		packAPI.addFile(path)
+	end
+end
+
 local downloadFunctions = {}
 
-downloadFunctions.raw = function(url, path)
+downloadFunctions.raw = function(url, path, version)
 	if type(url) == "table" then
 		local pack = url
 		url = pack.download.url
@@ -70,14 +85,17 @@ downloadFunctions.raw = function(url, path)
 		local event = {os.pullEvent()}
 		if event[1] == "http_success" then
 			if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
-				fs.makeDir(string.match(path, "(.-)/[^/]+$"))
-				packAPI.addFile(string.match(path, "(.-)/[^/]+$"))
+				createSingleFolder(string.match(path, "(.-)/[^/]+$"))
 			end
 			local fileHandle = io.open(path, "w")
 			if fileHandle then
 				fileHandle:write(event[3].readAll())
 				fileHandle:close()
-				packAPI.addFile(path)
+				if version then
+					packAPI.addFile(path, version)
+				else
+					packAPI.addFile(path)
+				end
 			else
 				printWarning("Unable to open file "..path)
 			end
@@ -92,13 +110,14 @@ end
 
 downloadFunctions.github = function(package)
 	local function getDirectoryContents(path)
-		local fType, fPath = {}, {}
+		local fType, fPath, fVer = {}, {}, {}
 		local response = http.get("https://api.github.com/repos/"..package.download.author.."/"..package.download.repository.."/contents/"..path)
 		if response then
 			response = response.readAll()
 			if response ~= nil then
 				for str in response:gmatch('"type":%s*"(%w+)",') do table.insert(fType, str) end
 				for str in response:gmatch('"path":%s*"([^\"]+)",') do table.insert(fPath, str) end
+				for str in response:gmatch('"sha":%s*"([^\"]+)",') do table.insert(fVer, str) end
 			end
 		else
 			printWarning("Can't fetch repository information")
@@ -106,7 +125,7 @@ downloadFunctions.github = function(package)
 		end
 		local directoryContents = {}
 		for i=1, #fType do
-			directoryContents[i] = {type = fType[i], path = fPath[i]}
+			directoryContents[i] = {type = fType[i], path = fPath[i], version = fVer[i]}
 		end
 		return directoryContents
 	end
@@ -117,7 +136,7 @@ downloadFunctions.github = function(package)
 			if file.type == "dir" then
 				addDirectoryContents(file.path, contentsTable)
 			else
-				table.insert(contentsTable, file.path)
+				table.insert(contentsTable, {path = file.path, version = file.version})
 			end
 		end
 		return contentsTable
@@ -125,8 +144,8 @@ downloadFunctions.github = function(package)
 	local contents = addDirectoryContents("", {})
 	if not contents then return nil, "content fetch failure" end
 	local localTarget = package.target or ""
-	for num, fileName in ipairs(contents) do
-		if not downloadFunctions.raw("https://raw.github.com/"..package.download.author.."/"..package.download.repository.."/master/"..fileName, fs.combine(localTarget, fileName)) then return false end
+	for num, file in ipairs(contents) do
+		if not downloadFunctions.raw("https://raw.github.com/"..package.download.author.."/"..package.download.repository.."/master/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
 	end
 	return true
 end
@@ -170,26 +189,8 @@ downloadFunctions.pastebin = function(pack)
 	return downloadFunctions.raw("http://pastebin.com/raw.php?i="..pack.download.url, fs.combine(pack.target, pack.download.filename))
 end
 
-if fs.exists("/etc/.installed") and fs.isDir("/etc/.installed") then
-	for _, file in ipairs(fs.list("/etc/.installed")) do
-		local handle = io.open(fs.combine("/etc/installed", file), "r")
-		if handle then
-			installed[file] = {name = file, files = {}}
-			for line in handle:lines() do
-				if installed[file].version then
-					table.insert(installed[file].files, line)
-				else
-					installed[file].version = line
-				end
-			end
-			handle:close()
-		end
-	end
-end
-
 function updateDatabase(package, files)
 	installed[package.name] = {
-		name = package.name,
 		version = package.version,
 		files = {}
 	}
@@ -207,10 +208,10 @@ function writeDatabase(package)
 			local handle = io.open(fs.combine("/etc/.installed", name), "w")
 			handle:write(installed[name].version.."\n")
 			for i = 1, #installed[name].files do
-				if type(installed[name].files[i]) == "table" then
+				if installed[name].files[i].version then
 					handle:write(installed[name].files[i].path..";"..installed[name].files[i].version.."\n")
 				else
-					handle:write(installed[name].files[i].."\n")
+					handle:write(installed[name].files[i].path.."\n")
 				end
 			end
 			handle:close()
@@ -238,44 +239,34 @@ local scriptEnv = {packman = packAPI}
 setmetatable(scriptEnv, {__index = _G})
 
 local Package = {
-	install = function(self)
+	install = function(self, env)
 		if downloadFunctions[self.download.type] then
 			if not downloadFunctions[self.download.type](self) then return false end
 		end
-		if #self.setupScript > 0 then
-			local setupTable = {}
-			for match in string.gmatch(self.setupScript, "(%S+)") do
-				table.insert(setupTable, match)
-			end
-			local programPath = fs.combine(self.target, table.remove(setupTable, 1))
-			scriptEnv.shell = getfenv(2).shell
-			os.run(scriptEnv, programPath, unpack(setupTable))		
+		if self.setup then
+			local shell = env.shell
+			shell.run(fs.combine(self.target, self.setup))	
 		end
 		updateDatabase(self, packAPI.pathList)
 		packAPI.pathList = {}
 		writeDatabase(self.name)
 		return true
 	end,
-	remove = function(self)
+	remove = function(self, env)
 		if not package.installed[self.name] then return false end
-		if self.removeScript then
-			local removeTable = {}
-			for match in string.gmatch(self.removeScript, "(%S+)") do
-				table.insert(removeTable, match)
-			end
-			local programPath = fs.combine(self.target, table.remove(setupTable, 1))
-			scriptEnv.shell = getfenv(2).shell
-			os.run(scriptEnv, programPath, unpack(setupTable))
+		if self.cleanup then
+			local shell = env.shell
+			shell.run(fs.combine(self.target, self.cleanup))
 		end
-		local fileList = package.installed[packageName].files
-		for i = 1, #fileList do
-			if fs.exists(fileList[i]) then
-				if fs.isDir(fileList[i]) then
-					if #fs.list(fileList[i]) == 0 then
-						fs.delete(fileList[i])
+		local fileList = package.installed[self.name].files
+		for i = #fileList, 1, -1 do
+			if fs.exists(fileList[i].path) then
+				if fs.isDir(fileList[i].path) then
+					if #(fs.list(fileList[i].path)) == 0 then
+						fs.delete(fileList[i].path)
 					end
 				else
-					fs.delete(fileList[i])
+					fs.delete(fileList[i].path)
 				end
 			end
 		end
@@ -295,8 +286,8 @@ function new(name)
 		dependencies = {},
 		--installation folder target
 		target = "/usr/bin",
-		setupScript = "",
-		removeScript = "",
+		setup = nil,
+		remove = nil,
 		download = {}
 	}
 
@@ -371,7 +362,7 @@ local function addPacks(file)
 						state = "dirty"
 					end
 				end
-			elseif property == "target" or property == "setup" or property == "update" or property == "remove" or property == "version" or property == "size" then
+			elseif property == "target" or property == "setup" or property == "update" or property == "cleanup" or property == "version" or property == "size" then
 				if state == "main" then
 					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
 				else
@@ -445,17 +436,23 @@ if fs.exists("/etc/repositories") then
 	end
 end
 
-if fs.exists("/etc/.installed") then
+if fs.exists("/etc/.installed") and fs.isDir("/etc/.installed") then
 	for _, file in ipairs(fs.list("/etc/.installed")) do
 		local handle = io.open(fs.combine("/etc/.installed", file), "r")
 		if handle then
-			installed[file] = {}
+			installed[file] = {files = {}}
+			local packVersion
 			for line in handle:lines() do
-				local path, version = string.match(line, "([^;]+);(.*)")
-				if path and version then
-					installed[file][#installed[file] + 1] = {path = path, version = version}
+				if not packVersion then
+					packVersion = line
+					installed[file].version = packVersion
 				else
-					installed[file][#installed[file] + 1] = line
+					local path, version = string.match(line, "([^;]+);(.*)")
+					if path and version then
+						installed[file].files[#installed[file].files + 1] = {path = path, version = version}
+					else
+						installed[file].files[#installed[file].files + 1] = {path = line, version = packVersion}
+					end
 				end
 			end
 			handle:close()

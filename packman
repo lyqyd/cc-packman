@@ -90,12 +90,13 @@ end
 local function raw_package_operation(name, funcName)
 	local pack = package.list[name]
 	if not pack then return nil, "No such package" end
-	local co = coroutine.create(function() return pack[funcName](pack) end)
+	local co = coroutine.create(function() return pack[funcName](pack, getfenv()) end)
 	local event, filter, passback = {}
 	while true do
 		if (filter and (filter == event[1] or event[1] == "terminate")) or not filter then
 			passback = {coroutine.resume(co, unpack(event))}
 		end
+		if passback[1] == false then printWarning(passback[2]) end
 		if coroutine.status(co) == "dead" then return unpack(passback, 2) end
 		filter = nil
 		if passback and passback[1] and passback[2] then
@@ -159,9 +160,9 @@ if mode == "install" then
 			for packageName in pairs(installList) do
 				if not install(packageName) then
 					printWarning("Could not "..mode.." package "..packageName)
-				elseif package.list[packageName].setup then
+				--elseif package.list[packageName].setup then
 					--successfully installed, see if it has a setup script to run
-					shell.run(fs.combine(package.list[packageName].target, package.list[packageName].setup))
+					--shell.run(fs.combine(package.list[packageName].target, package.list[packageName].setup))
 				end
 			end
 		end
@@ -210,9 +211,9 @@ elseif mode == "remove" then
 		local packageList = args
 		dependeesList = {}
 		--find packages which depend on the packages we are removing.
-		for pName, pData in pairs(package.list) do
+		for pName, pData in pairs(package.installed) do
 			if not packageList[pName] then
-				for dName in pairs(pData.dependencies) do
+				for dName in pairs(package.list[pName].dependencies) do
 					for _, packName in pairs(packageList) do
 						if packName == dName then
 							dependeesList[pName] = true
@@ -248,10 +249,12 @@ elseif mode == "remove" then
 					return true
 				end
 			end
-			for _, pName in pairs(packageList) do
+			for pName in pairs(dependeesList) do
+				printInformation("Removing "..pName)
 				remove(pName)
 			end
-			for pName in pairs(dependeesList) do
+			for _, pName in pairs(packageList) do
+				printInformation("Removing "..pName)
 				remove(pName)
 			end
 		else
