@@ -49,6 +49,7 @@ local downloadTypes = {
 	bitbucket = {
 		author = true,
 		repository = true,
+		branch = true,
 	},
 	pastebin = {
 		url = true,
@@ -59,6 +60,74 @@ local downloadTypes = {
 		filename = true,
 	},
 }
+
+local lookupFunctions = {}
+
+lookupFunctions.github = function(package)
+	local function getDirectoryContents(path)
+		local fType, fPath, fVer = {}, {}, {}
+		local response = http.get("https://api.github.com/repos/"..package.download.author.."/"..package.download.repository.."/contents/"..path)
+		if response then
+			response = response.readAll()
+			if response ~= nil then
+				for str in response:gmatch('"type":%s*"(%w+)",') do table.insert(fType, str) end
+				for str in response:gmatch('"path":%s*"([^\"]+)",') do table.insert(fPath, str) end
+				for str in response:gmatch('"sha":%s*"([^\"]+)",') do table.insert(fVer, str) end
+			end
+		else
+			printWarning("Can't fetch repository information")
+			return nil
+		end
+		local directoryContents = {}
+		for i=1, #fType do
+			directoryContents[i] = {type = fType[i], path = fPath[i], version = fVer[i]}
+		end
+		return directoryContents
+	end
+	local function addDirectoryContents(path, contentsTable)
+		local contents = getDirectoryContents(path)
+		if not contents then return nil, "no contents" end
+		for n, file in ipairs(contents) do
+			if file.type == "dir" then
+				addDirectoryContents(file.path, contentsTable)
+			else
+				table.insert(contentsTable, {path = file.path, version = file.version})
+			end
+		end
+		return contentsTable
+	end
+	return addDirectoryContents("", {})
+end
+
+lookupFunctions.bitbucket = function(package)
+	local function getDirectoryContents(path)
+		local directoryContents = {}
+		local response = http.get("https://api.bitbucket.org/1.0/repositories/"..package.download.author.."/"..package.download.repository.."/src/"..package.download.branch..path)
+		if response then
+			response = response.readAll()
+			if response ~= nil then
+				for str in string.gmatch(string.match(response, '"directories": %[(.-)%]'), '"([^,\"]+)"') do table.insert(directoryContents, {type = "dir", path = str}) end
+				for str, ver in string.gmatch(string.match(response, '"files": %[(.-)%]'), '"path": "([^\"]+)".-"revision": "([^\"]+)"') do table.insert(directoryContents, {type = "file", path = str, version = ver}) end
+			end
+		else
+			printWarning("Can't fetch repository information")
+			return nil
+		end
+		return directoryContents
+	end
+	local function addDirectoryContents(path, contentsTable)
+		local contents = getDirectoryContents(path)
+		for n, file in ipairs(contents) do
+			if file.type == "dir" then
+				addDirectoryContents(path..file.path.."/", contentsTable)
+			else
+				table.insert(contentsTable, {path = file.path, version = file.version})
+			end
+		end
+		return contentsTable
+	end
+	return addDirectoryContents("/", {})
+end
 
 local function createSingleFolder(path)
 	if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
@@ -109,39 +178,7 @@ downloadFunctions.raw = function(url, path, version)
 end
 
 downloadFunctions.github = function(package)
-	local function getDirectoryContents(path)
-		local fType, fPath, fVer = {}, {}, {}
-		local response = http.get("https://api.github.com/repos/"..package.download.author.."/"..package.download.repository.."/contents/"..path)
-		if response then
-			response = response.readAll()
-			if response ~= nil then
-				for str in response:gmatch('"type":%s*"(%w+)",') do table.insert(fType, str) end
-				for str in response:gmatch('"path":%s*"([^\"]+)",') do table.insert(fPath, str) end
-				for str in response:gmatch('"sha":%s*"([^\"]+)",') do table.insert(fVer, str) end
-			end
-		else
-			printWarning("Can't fetch repository information")
-			return nil
-		end
-		local directoryContents = {}
-		for i=1, #fType do
-			directoryContents[i] = {type = fType[i], path = fPath[i], version = fVer[i]}
-		end
-		return directoryContents
-	end
-	local function addDirectoryContents(path, contentsTable)
-		local contents = getDirectoryContents(path)
-		if not contents then return nil, "no contents" end
-		for n, file in ipairs(contents) do
-			if file.type == "dir" then
-				addDirectoryContents(file.path, contentsTable)
-			else
-				table.insert(contentsTable, {path = file.path, version = file.version})
-			end
-		end
-		return contentsTable
-	end
-	local contents = addDirectoryContents("", {})
+	local contents = lookupFunctions.github(package)
 	if not contents then return nil, "content fetch failure" end
 	local localTarget = package.target or ""
 	for num, file in ipairs(contents) do
@@ -151,36 +188,10 @@ downloadFunctions.github = function(package)
 end
 
 downloadFunctions.bitbucket = function(package)
-	local function getDirectoryContents(path)
-		local directoryContents = {}
-		local response = http.get("https://api.bitbucket.org/1.0/repositories/"..package.download.author.."/"..package.download.repository.."/src/default"..path)
-		if response then
-			response = response.readAll()
-			if response ~= nil then
-				for str in string.gmatch(string.match(response, '"directories": %[(.-)%]'), '"([^,\"]+)"') do table.insert(directoryContents, {type = "dir", path = str}) end
-				for str in string.gmatch(string.match(response, '"files": %[(.-)%]'), '"path": "([^\"]+)"') do table.insert(directoryContents, {type = "file", path = str}) end
-			end
-		else
-			printWarning("Can't fetch repository information")
-			return nil
-		end
-		return directoryContents
-	end
-	local function addDirectoryContents(path, contentsTable)
-		local contents = getDirectoryContents(path)
-		for n, file in ipairs(contents) do
-			if file.type == "dir" then
-				addDirectoryContents(path..file.path.."/", contentsTable)
-			else
-				table.insert(contentsTable, file.path)
-			end
-		end
-		return contentsTable
-	end
-	local contents = addDirectoryContents("/", {})
+	local contents = lookupFunctions.bitbucket(package)
 	local localTarget = package.target or ""
-	for num, fileName in ipairs(contents) do
-		if not downloadFunctions.raw("https://bitbucket.org/"..package.download.author.."/"..package.download.repository.."/raw/default/"..fileName, fs.combine(localTarget, fileName)) then return false end
+	for num, file in ipairs(contents) do
+		if not downloadFunctions.raw("https://bitbucket.org/"..package.download.author.."/"..package.download.repository.."/raw/"..package.download.branch.."/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
 	end
 	return true
 end
@@ -235,6 +246,12 @@ function writeDatabase(package)
 	end
 end
 
+local function findInstalledVersionByPath(packName, path)
+	for i, file in ipairs(package.installed[packName].files) do
+		if file.path == path then return file.version end
+	end
+end
+
 local scriptEnv = {packman = packAPI}
 setmetatable(scriptEnv, {__index = _G})
 
@@ -272,6 +289,24 @@ local Package = {
 		end
 		package.installed[self.name] = nil
 		writeDatabase(self.name)
+	end,
+	upgrade = function(self, env)
+		if not package.installed[self.name] then return false end
+		if lookupFunctions[self.download.type] then
+			local contents = lookupFunctions[self.download.type](self)
+			for num, file in ipairs(contents) do
+				if file.version ~= findInstalledVersionByPath(self.name, file.path) then
+					packAPI.removeFile(file.path)
+					if self.download.type == "github" then
+						if not downloadFunctions.raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/master/"..file.path, fs.combine(self.target, file.path), file.version) then return false end
+					elseif self.download.type == "bitbucket" then
+						if not downloadFunctions.raw("https://bitbucket.org/"..self.download.author.."/"..self.download.repository.."/raw/"..self.download.branch.."/"..file.path, fs.combine(self.target, file.path), file.version) then return false end
+					end
+				end
+			end
+		else
+			self:install()
+		end
 	end,
 }
 
