@@ -123,6 +123,10 @@ local function remove(name)
 	return raw_package_operation(name, "remove")
 end
 
+local function upgrade(name)
+	return raw_package_operation(name, "upgrade")
+end
+
 local mode = table.remove(args, 1)
 
 if mode == "force" then
@@ -195,7 +199,7 @@ elseif mode == "update" then
 			end
 		end
 		for _, packageName in pairs(updateList) do
-			install(packageName)
+			upgrade(packageName)
 		end
 	else
 		print("Nothing to do!")
