@@ -59,6 +59,7 @@ name = configuration
 		url = ARMEBbJz
 		filename = configuration
 	category = api
+	dependencies = none
 	target = /usr/apis
 	version = 0.1
 	size = 939
