@@ -5,7 +5,7 @@ name = LyqydOS
 	category = os
 	setup = installer setup
 	cleanup = installer remove
-	dependencies = framebuffer
+	dependencies = framebuffer configuration
 	target = /LyqydOS
 	version = 1.0
 	size = 152274
@@ -52,4 +52,14 @@ name = framebuffer
 	target = /usr/apis
 	version = 0.2
 	size = 7382
+end
+
+name = configuration
+	type = pastebin
+		url = ARMEBbJz
+		filename = configuration
+	category = api
+	target = /usr/apis
+	version = 0.1
+	size = 939
 end
