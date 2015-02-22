@@ -262,7 +262,7 @@ local Package = {
 		end
 		if self.setup then
 			local shell = env.shell
-			shell.run(fs.combine(self.target, self.setup))	
+			shell.run(fs.combine(self.target, self.setup))
 		end
 		updateDatabase(self, packAPI.pathList)
 		packAPI.pathList = {}
@@ -368,10 +368,11 @@ local function addPacks(file)
 					state = "main"
 				end
 			end
-			local property = string.match(line, "^%s*(%S*)")
+			local property,hasValue,value = string.match(line, "^%s*([^=%s]+)%s*(=?)%s*(.-)%s*$")
+			hasValue=hasValue~="" or nil
 			if property == "name" and state == "" then
 				if state == "" then
-					entryTable = new(string.lower(string.match(line, "^%s*name%s*=%s*(%S*)")))
+					entryTable = new(string.lower(value))
 					entryTable.target = "/usr/bin"
 					state = "main"
 				else
@@ -382,7 +383,7 @@ local function addPacks(file)
 				end
 			elseif property == "type" then
 				if state == "main" then
-					entryTable.download.type = string.match(line, "^%s*type%s*=%s*(%S*)")
+					entryTable.download.type = string.match(value, "^(%S*)$")
 					if downloadFunctions[entryTable.download.type] then
 						state = "type"
 					else
@@ -399,7 +400,7 @@ local function addPacks(file)
 				end
 			elseif property == "target" or property == "setup" or property == "update" or property == "cleanup" or property == "version" or property == "size" then
 				if state == "main" then
-					entryTable[property] = string.match(line, "^%s*"..property.."%s*=%s*(.*)")
+					entryTable[property] = value
 				else
 					if state ~= "dirty" then
 						printWarning("Unexpected "..property.." at line "..lineCount.." in "..file)
@@ -408,7 +409,7 @@ local function addPacks(file)
 				end
 			elseif property == "dependencies" or property == "category" then
 				if state == "main" then
-					for str in string.gmatch(string.match(line, "^%s*"..property.."%s*=%s*(.*)"), "(%S+)") do
+					for str in string.gmatch(value, "(%S+)") do
 						entryTable[property][str] = true
 					end
 				else
@@ -448,7 +449,7 @@ local function addPacks(file)
 					end
 				end
 				if propertyFound then
-					entryTable.download[property] = string.match(line, "^%s*"..property.."%s*=%s*(%S*)")
+					entryTable.download[property] = value
 				else
 					printWarning("Unexpected "..property.." at line "..lineCount.." in "..file)
 					state = "dirty"
