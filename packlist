@@ -7,8 +7,8 @@ name = LyqydOS
 	cleanup = installer remove
 	dependencies = framebuffer configuration
 	target = /LyqydOS
-	version = 1.0
-	size = 152274
+	version = 1.1
+	size = 158318
 end
 
 name = LyqydNet
@@ -18,8 +18,8 @@ name = LyqydNet
 	category = networking rednet api
 	dependencies = none
 	target = /usr
-	version = 1.4
-	size = 31874
+	version = 1.5
+	size = 46169
 end
 
 name = location-api
@@ -39,8 +39,8 @@ name = nsh
 		repository = cc-netshell
 	category = rednet shell remote
 	dependencies = framebuffer
-	version = 0.6
-	size = 18854
+	version = 0.7
+	size = 32510
 end
 
 name = framebuffer
@@ -50,8 +50,8 @@ name = framebuffer
 	category = redirect buffer api
 	dependencies = none
 	target = /usr/apis
-	version = 0.2
-	size = 7382
+	version = 0.3
+	size = 7874
 end
 
 name = configuration
