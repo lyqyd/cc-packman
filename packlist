@@ -33,6 +33,15 @@ name = location-api
 	size = 2671
 end
 
+name = touchpoint-api
+	type = raw
+		url = https://github.com/lyqyd/Touchpoint/raw/master/touchpoint
+		filename = touchpoint
+	category = advanced monitor api
+	dependencies = none
+	target = /usr/apis/
+	version = 0.1
+	size = 8774
 name = nsh
 	type = github
 		author = lyqyd
