@@ -1,5 +1,6 @@
 local versionNumber = 1.3
 
+os.unloadAPI("package")
 if not package then if shell.resolveProgram("package") then os.loadAPI(shell.resolveProgram("package")) elseif fs.exists("usr/apis/package") then os.loadAPI("usr/apis/package") else error("Could not load package API!") end end
 
 local args = {...}
@@ -320,9 +321,6 @@ elseif mode == "fetch" then
 		remoteHandle.close()
 	else
 		printError("Could not retrieve remote file: repolist")
-	end
-	while args[1] == "fetch" do
-		table.remove(args, 1)
 	end
 	if #args > 0 then
 		while args[1] == "fetch" do
