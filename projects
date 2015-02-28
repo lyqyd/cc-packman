@@ -1,53 +1,53 @@
-name = project-demosthenex-turbine
+name = demosthenex-turbine
 	type = raw
 		url = https://raw.github.com/lyqyd/cc-generalized-setup/master/projects/demosthenex-turbine
 		filename = demosthenex-turbine
 	category = turtle
-	dependencies = setup
+	dependencies = main/setup
 	target = /etc/projects
 	version = 0.1
 	size = 9425
 end
 
-name = project-dome13
+name = dome13
 	type = raw
 		url = https://raw.github.com/lyqyd/cc-generalized-setup/master/projects/dome13
 		filename = dome13
 	category = turtle
-	dependencies = setup
+	dependencies = main/setup
 	target = /etc/projects
 	version = 0.1
 	size = 6864
 end
 
-name = project-gpssatellite
+name = gpssatellite
 	type = raw
 		url = https://raw.github.com/lyqyd/cc-generalized-setup/master/projects/gpssatellite
 		filename = gpssatellite
 	category = turtle gps
-	dependencies = setup
+	dependencies = main/setup
 	target = /etc/projects
 	version = 0.1
 	size = 9193
 end
 
-name = project-lyqyd-house
+name = lyqyd-house
 	type = raw
 		url = https://raw.github.com/lyqyd/cc-generalized-setup/master/projects/lyqyd-house
 		filename = lyqyd-house
 	category = turtle
-	dependencies = setup
+	dependencies = main/setup
 	target = /etc/projects
 	version = 0.1
 	size = 12388
 end
 
-name = project-treefarm
+name = treefarm
 	type = raw
 		url = https://raw.github.com/lyqyd/cc-generalized-setup/master/projects/treefarm
 		filename = treefarm
 	category = turtle
-	dependencies = setup
+	dependencies = main/setup
 	target = /etc/projects
 	version = 0.1
 	size = 3510
