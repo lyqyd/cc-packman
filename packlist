@@ -41,7 +41,9 @@ name = touchpoint-api
 	dependencies = none
 	target = /usr/apis/
 	version = 0.1
-	size = 8774
+	size = 4931
+end
+
 name = nsh
 	type = github
 		author = lyqyd
