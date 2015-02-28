@@ -22,7 +22,7 @@ name = LyqydNet
 	size = 46169
 end
 
-name = location-api
+name = location
 	type = raw
 		url = https://raw.github.com/lyqyd/LyqydNet-Programs/master/apis/location
 		filename = location
@@ -33,9 +33,9 @@ name = location-api
 	size = 2671
 end
 
-name = touchpoint-api
+name = touchpoint
 	type = raw
-		url = https://github.com/lyqyd/Touchpoint/raw/master/touchpoint
+		url = https://raw.github.com/lyqyd/Touchpoint/master/touchpoint
 		filename = touchpoint
 	category = advanced monitor api
 	dependencies = none
