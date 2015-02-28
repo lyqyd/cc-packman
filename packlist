@@ -64,3 +64,13 @@ name = configuration
 	version = 0.1
 	size = 939
 end
+
+name = setup
+	type = raw
+		url = https://raw.github.com/lyqyd/cc-generalized-setup/master/setup
+		filename = setup
+	category = turtle gui
+	dependencies = location-api
+	version = 0.1
+	size = 25045
+end
