@@ -181,9 +181,11 @@ elseif mode == "update" then
 			table.insert(updateList, k)
 		end
 	end
-	for i = #updateList, 1, -1 do
-		if package.installed[updateList[i]].version == package.list[updateList[i]].version then
-			table.remove(updateList, i)
+	if not forced then
+		for i = #updateList, 1, -1 do
+			if package.installed[updateList[i]].version == package.list[updateList[i]].version then
+				table.remove(updateList, i)
+			end
 		end
 	end
 	if #updateList > 0 then
