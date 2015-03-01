@@ -200,23 +200,23 @@ downloadFunctions.pastebin = function(pack)
 	return downloadFunctions.raw("http://pastebin.com/raw.php?i="..pack.download.url, fs.combine(pack.target, pack.download.filename))
 end
 
-function updateDatabase(package, files)
-	installed[package.name] = {
-		version = package.version,
+function updateDatabase(pack, files)
+	installed[pack.repo.."/"..pack.name] = {
+		version = pack.version,
 		files = {}
 	}
 	for i = 1, #files do
-		installed[package.name].files[i] = files[i]
+		installed[pack.repo.."/"..pack.name].files[i] = files[i]
 	end
 end
 
-function writeDatabase(package)
-	if package then
-		--update the entry of a specific package
-		name = type(package) == "table" and package.name or package
+function writeDatabase(pack)
+	if pack then
+		--update the entry of a specific pack
+		local name = pack.repo.."/"..pack.name
 		if installed[name] then
-			if not fs.exists("/etc/.installed") then fs.makeDir("/etc/.installed") end
-			local handle = io.open(fs.combine("/etc/.installed", name), "w")
+			if not fs.exists(fs.combine("/etc/.installed", pack.repo)) then fs.makeDir(fs.combine("/etc/.installed", pack.repo)) end
+			local handle = io.open(fs.combine(fs.combine("/etc/.installed", pack.repo), pack.name), "w")
 			handle:write(installed[name].version.."\n")
 			for i = 1, #installed[name].files do
 				if installed[name].files[i].version then
@@ -233,15 +233,19 @@ function writeDatabase(package)
 		--write all the packages!
 		local packageNames = {}
 		--both installed
-		for packName in pairs(installed) do
-			packageNames[packName] = true
+		for name, info in pairs(installed) do
+			if info.version then
+				packageNames[name] = true
+			end
 		end
 		--and recently uninstalled
-		for _, file in pairs(fs.list("/etc/.installed")) do
-			packageNames[file] = true
+		for _, repo in pairs(fs.list("/etc/.installed")) do
+			for _, file in pairs(fs.list(fs.combine("/etc/.installed", repo))) do
+				packageNames[repo.."/"..file] = true
+			end
 		end
 		for name in pairs(packageNames) do
-			writeDatabase(name)
+			writeDatabase(package.list[name])
 		end
 	end
 end
@@ -266,7 +270,7 @@ local Package = {
 		end
 		updateDatabase(self, packAPI.pathList)
 		packAPI.pathList = {}
-		writeDatabase(self.name)
+		writeDatabase(self)
 		return true
 	end,
 	remove = function(self, env)
@@ -288,7 +292,7 @@ local Package = {
 			end
 		end
 		package.installed[self.name] = nil
-		writeDatabase(self.name)
+		writeDatabase(self)
 	end,
 	upgrade = function(self, env)
 		if not package.installed[self.name] then return false end
@@ -312,9 +316,10 @@ local Package = {
 
 local pmetatable = {__index = Package}
 
-function new(name)
+function new(name, repo)
 	local p = {
 		name = name,
+		repo = repo,
 		version = "",
 		size = 0,
 		category = {},
@@ -350,6 +355,7 @@ end
 if not fs.exists("/usr/bin") then fs.makeDir("/usr/bin") end
 --process package list
 local function addPacks(file)
+	local packName = fs.getName(file)
 	local state = ""
 	local listHandle = io.open(file, "r")
 	local entryTable
@@ -372,7 +378,7 @@ local function addPacks(file)
 			hasValue=hasValue~="" or nil
 			if property == "name" and state == "" then
 				if state == "" then
-					entryTable = new(string.lower(value))
+					entryTable = new(string.lower(value), packName)
 					entryTable.target = "/usr/bin"
 					state = "main"
 				else
@@ -433,7 +439,12 @@ local function addPacks(file)
 							break
 						end
 						if i then
-							list[entryTable.name] = entryTable
+							list[packName.."/"..entryTable.name] = entryTable
+							if list[entryTable.name] then
+								list[entryTable.name][packName] = entryTable
+							else
+								list[entryTable.name] = {[packName] = entryTable}
+							end
 						end
 					else
 						entryTable = nil
@@ -473,27 +484,35 @@ if fs.exists("/etc/repositories") then
 end
 
 if fs.exists("/etc/.installed") and fs.isDir("/etc/.installed") then
-	for _, file in ipairs(fs.list("/etc/.installed")) do
-		local handle = io.open(fs.combine("/etc/.installed", file), "r")
-		if handle then
-			installed[file] = {files = {}}
-			local packVersion
-			for line in handle:lines() do
-				if not packVersion then
-					packVersion = line
-					installed[file].version = packVersion
-				else
-					local path, version = string.match(line, "([^;]+);(.*)")
-					if path and version then
-						installed[file].files[#installed[file].files + 1] = {path = path, version = version}
+	for _, repo in ipairs(fs.list("/etc/.installed")) do
+		for _, file in ipairs(fs.list(fs.combine("/etc/.installed", repo))) do
+			local name = repo.."/"..file
+			local handle = io.open(fs.combine(fs.combine("/etc/.installed", repo), file), "r")
+			if handle then
+				installed[name] = {files = {}}
+				local packVersion
+				for line in handle:lines() do
+					if not packVersion then
+						packVersion = line
+						installed[name].version = packVersion
 					else
-						installed[file].files[#installed[file].files + 1] = {path = line, version = packVersion}
+						local path, version = string.match(line, "([^;]+);(.*)")
+						if path and version then
+							installed[name].files[#installed[name].files + 1] = {path = path, version = version}
+						else
+							installed[name].files[#installed[name].files + 1] = {path = line, version = packVersion}
+						end
 					end
 				end
+				handle:close()
+				if installed[file] then
+					installed[file][repo] = installed[name]
+				else
+					installed[file] = {[repo] = installed[name]}
+				end
+			else
+				printWarning("Couldn't open package db file: "..file)
 			end
-			handle:close()
-		else
-			printWarning("Couldn't open package db file: "..file)
 		end
 	end
 end

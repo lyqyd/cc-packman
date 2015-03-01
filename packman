@@ -1,5 +1,6 @@
 local versionNumber = 1.3
 
+os.unloadAPI("package")
 if not package then if shell.resolveProgram("package") then os.loadAPI(shell.resolveProgram("package")) elseif fs.exists("usr/apis/package") then os.loadAPI("usr/apis/package") else error("Could not load package API!") end end
 
 local args = {...}
@@ -65,12 +66,14 @@ local categorySorted = {}
 
 if args[1] ~= "fetch" then
 	for n, v in pairs(package.list) do
-		for category in pairs(v.category) do
-			if not categoryList[category] then
-				categoryList[category] = {[n] = true}
-				table.insert(categorySorted, category)
-			else
-				categoryList[category][n] = true
+		if v.category then
+			for category in pairs(v.category) do
+				if not categoryList[category] then
+					categoryList[category] = {[n] = true}
+					table.insert(categorySorted, category)
+				else
+					categoryList[category][n] = true
+				end
 			end
 		end
 	end
@@ -78,12 +81,53 @@ if args[1] ~= "fetch" then
 
 	--flesh out dependencies
 	for pName, pData in pairs(package.list) do
-		pData.dependencies, errmsg = package.findDependencies(pName, {})
-		if not pData.dependencies then
-			--if dependencies could not be resolved, remove the package.
-			printWarning("Could not resolve dependency on "..errmsg.." in package "..pName)
-			package.list[pName] = nil
+		if pData.dependencies then
+			pData.dependencies, errmsg = package.findDependencies(pName, {})
+			if not pData.dependencies then
+				--if dependencies could not be resolved, remove the package.
+				printWarning("Could not resolve dependency on "..errmsg.." in package "..pName)
+				package.list[pName] = nil
+			end
 		end
+	end
+end
+
+local function lookupPackage(name, installedOnly)
+	if package.list[name] and not package.list[name].dependencies then
+		local options = {}
+		if installedOnly and package.installed[name] then
+			for name, pack in pairs(package.installed[name]) do
+				table.insert(options, name)
+			end
+		elseif installedOnly then
+			--using installedOnly, but no packages of that name are installed.
+			return false
+		else
+			for name, pack in pairs(package.list[name]) do
+				table.insert(options, name)
+			end
+		end
+		if #options > 1 then
+			print("Package "..name.." is ambiguous.")
+			for i = 1, #options do
+				write(tostring(i)..": "..options[i].."  ")
+			end
+			print("")
+			print("Select option: ")
+			local selection = read()
+			if tonumber(selection) and options[tonumber(selection)] then
+				return options[tonumber(selection)].."/"..name
+			end
+		elseif #options == 1 then
+			return options[1].."/"..name
+		else
+			return false
+		end
+	elseif package.list[name] then
+		--since it must have a dependencies table, the name is already fully unique.
+		return name
+	else
+		return false
 	end
 end
 
@@ -138,10 +182,11 @@ if mode == "install" then
 	if #args >= 1 then
 		local installList = {}
 		for packageNumber, packageName in ipairs(args) do
-			if not package.list[packageName] then
+			local result = lookupPackage(packageName)
+			if not result then
 				printWarning("Could not install package "..packageName..".")
 			else
-				for k,v in pairs(package.list[packageName].dependencies) do
+				for k,v in pairs(package.list[result].dependencies) do
 					if not package.installed[k] then
 						installList[k] = true
 					end
@@ -174,15 +219,25 @@ if mode == "install" then
 elseif mode == "update" then
 	local updateList = {}
 	if #args >= 1 then
-		updateList = args
+		for _, name in ipairs(args) do
+			local result = lookupPackage(name, true)
+			if result then
+				table.insert(updateList, result)
+			end
+		end
 	else
 		for k, v in pairs(package.installed) do
-			table.insert(updateList, k)
+			if v.files then
+				--filters out the disambiguation entries.
+				table.insert(updateList, k)
+			end
 		end
 	end
-	for i = #updateList, 1, -1 do
-		if package.installed[updateList[i]].version == package.list[updateList[i]].version then
-			table.remove(updateList, i)
+	if not forced then
+		for i = #updateList, 1, -1 do
+			if package.installed[updateList[i]].version == package.list[updateList[i]].version then
+				table.remove(updateList, i)
+			end
 		end
 	end
 	if #updateList > 0 then
@@ -207,25 +262,28 @@ elseif mode == "update" then
 	end
 elseif mode == "remove" then
 	if #args >= 1 then
-		for i = #args, 1, -1 do
-			if not package.installed[args[1]] then
-				table.remove(args, i)
+		local packageList = {}
+		for _, name in ipairs(args) do
+			local result = lookupPackage(name, true)
+			if result then
+				table.insert(packageList, result)
 			end
 		end
-		local packageList = args
 		dependeesList = {}
 		--find packages which depend on the packages we are removing.
 		for pName, pData in pairs(package.installed) do
-			if not packageList[pName] then
-				for dName in pairs(package.list[pName].dependencies) do
-					for _, packName in pairs(packageList) do
-						if packName == dName then
-							dependeesList[pName] = true
+			if pData.version then
+				if not packageList[pName] then
+					for dName in pairs(package.list[pName].dependencies) do
+						for _, packName in pairs(packageList) do
+							if packName == dName then
+								dependeesList[pName] = true
+								break
+							end
+						end
+						if dependeesList[pName] then
 							break
 						end
-					end
-					if dependeesList[pName] then
-						break
 					end
 				end
 			end
@@ -320,9 +378,6 @@ elseif mode == "fetch" then
 		remoteHandle.close()
 	else
 		printError("Could not retrieve remote file: repolist")
-	end
-	while args[1] == "fetch" do
-		table.remove(args, 1)
 	end
 	if #args > 0 then
 		while args[1] == "fetch" do

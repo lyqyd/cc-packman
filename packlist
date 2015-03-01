@@ -5,7 +5,7 @@ name = LyqydOS
 	category = os
 	setup = installer setup
 	cleanup = installer remove
-	dependencies = framebuffer configuration
+	dependencies = main/framebuffer main/configuration
 	target = /LyqydOS
 	version = 1.1
 	size = 158318
@@ -22,7 +22,7 @@ name = LyqydNet
 	size = 46169
 end
 
-name = location-api
+name = location
 	type = raw
 		url = https://raw.github.com/lyqyd/LyqydNet-Programs/master/apis/location
 		filename = location
@@ -33,12 +33,23 @@ name = location-api
 	size = 2671
 end
 
+name = touchpoint
+	type = raw
+		url = https://raw.github.com/lyqyd/Touchpoint/master/touchpoint
+		filename = touchpoint
+	category = advanced monitor api
+	dependencies = none
+	target = /usr/apis/
+	version = 0.1
+	size = 4931
+end
+
 name = nsh
 	type = github
 		author = lyqyd
 		repository = cc-netshell
 	category = rednet shell remote
-	dependencies = framebuffer
+	dependencies = main/framebuffer
 	version = 0.7
 	size = 32510
 end
@@ -63,4 +74,14 @@ name = configuration
 	target = /usr/apis
 	version = 0.1
 	size = 939
+end
+
+name = setup
+	type = raw
+		url = https://raw.github.com/lyqyd/cc-generalized-setup/master/setup
+		filename = setup
+	category = turtle gui
+	dependencies = main/location-api
+	version = 0.1
+	size = 25045
 end
