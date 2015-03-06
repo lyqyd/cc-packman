@@ -364,6 +364,7 @@ elseif mode == "fetch" then
 	print("Updating package API")
 	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/package")
 	if remoteHandle then
+		if not fs.exists("/usr/apis") then fs.makeDir("/usr/apis") end
 		local fileHandle = io.open("/usr/apis/package", "w")
 		if fileHandle then
 			fileHandle:write(remoteHandle.readAll())
