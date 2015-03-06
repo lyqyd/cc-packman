@@ -279,7 +279,7 @@ local Package = {
 			local shell = env.shell
 			shell.run(fs.combine(self.target, self.cleanup))
 		end
-		local fileList = package.installed[self.name].files
+		local fileList = package.installed[self.repo.."/"..self.name].files
 		for i = #fileList, 1, -1 do
 			if fs.exists(fileList[i].path) then
 				if fs.isDir(fileList[i].path) then
@@ -291,7 +291,18 @@ local Package = {
 				end
 			end
 		end
-		package.installed[self.name] = nil
+		package.installed[self.name][self.repo] = nil
+		local othersWithName = false
+		for k, v in pairs(package.installed[self.name]) do
+			if v then
+				othersWithName = true
+				break
+			end
+		end
+		if not othersWithName then
+			package.installed[self.name] = nil
+		end
+		package.installed[self.repo.."/"..self.name] = nil
 		writeDatabase(self)
 	end,
 	upgrade = function(self, env)
@@ -299,7 +310,7 @@ local Package = {
 		if lookupFunctions[self.download.type] then
 			local contents = lookupFunctions[self.download.type](self)
 			for num, file in ipairs(contents) do
-				if file.version ~= findInstalledVersionByPath(self.name, file.path) then
+				if file.version ~= findInstalledVersionByPath(self.repo.."/"..self.name, file.path) then
 					packAPI.removeFile(file.path)
 					if self.download.type == "github" then
 						if not downloadFunctions.raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/master/"..file.path, fs.combine(self.target, file.path), file.version) then return false end
@@ -477,41 +488,43 @@ local function addPacks(file)
 	end
 end
 
-if fs.exists("/etc/repositories") then
-	for _, file in ipairs(fs.list("/etc/repositories")) do
-		addPacks(fs.combine("/etc/repositories", file))
+function load()
+	if fs.exists("/etc/repositories") then
+		for _, file in ipairs(fs.list("/etc/repositories")) do
+			addPacks(fs.combine("/etc/repositories", file))
+		end
 	end
-end
 
-if fs.exists("/etc/.installed") and fs.isDir("/etc/.installed") then
-	for _, repo in ipairs(fs.list("/etc/.installed")) do
-		for _, file in ipairs(fs.list(fs.combine("/etc/.installed", repo))) do
-			local name = repo.."/"..file
-			local handle = io.open(fs.combine(fs.combine("/etc/.installed", repo), file), "r")
-			if handle then
-				installed[name] = {files = {}}
-				local packVersion
-				for line in handle:lines() do
-					if not packVersion then
-						packVersion = line
-						installed[name].version = packVersion
-					else
-						local path, version = string.match(line, "([^;]+);(.*)")
-						if path and version then
-							installed[name].files[#installed[name].files + 1] = {path = path, version = version}
+	if fs.exists("/etc/.installed") and fs.isDir("/etc/.installed") then
+		for _, repo in ipairs(fs.list("/etc/.installed")) do
+			for _, file in ipairs(fs.list(fs.combine("/etc/.installed", repo))) do
+				local name = repo.."/"..file
+				local handle = io.open(fs.combine(fs.combine("/etc/.installed", repo), file), "r")
+				if handle then
+					installed[name] = {files = {}}
+					local packVersion
+					for line in handle:lines() do
+						if not packVersion then
+							packVersion = line
+							installed[name].version = packVersion
 						else
-							installed[name].files[#installed[name].files + 1] = {path = line, version = packVersion}
+							local path, version = string.match(line, "([^;]+);(.*)")
+							if path and version then
+								installed[name].files[#installed[name].files + 1] = {path = path, version = version}
+							else
+								installed[name].files[#installed[name].files + 1] = {path = line, version = packVersion}
+							end
 						end
 					end
-				end
-				handle:close()
-				if installed[file] then
-					installed[file][repo] = installed[name]
+					handle:close()
+					if installed[file] then
+						installed[file][repo] = installed[name]
+					else
+						installed[file] = {[repo] = installed[name]}
+					end
 				else
-					installed[file] = {[repo] = installed[name]}
+					printWarning("Couldn't open package db file: "..file)
 				end
-			else
-				printWarning("Couldn't open package db file: "..file)
 			end
 		end
 	end

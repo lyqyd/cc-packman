@@ -5,10 +5,11 @@ if not package then if shell.resolveProgram("package") then os.loadAPI(shell.res
 
 local args = {...}
 
-if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "fetch" and args[1] ~= "force") then
+if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "fetch" and args[1] ~= "force" and args[1] ~= "list") then
 	print("Usage:")
 	print("packman [force] <install|update|remove> <package name[s]>")
 	print("packman fetch")
+	print("packman list [pattern]")
 	return
 end
 
@@ -60,6 +61,8 @@ end
 package.printInformation = printInformation
 
 resetScreen()
+
+package.load()
 
 local categoryList = {}
 local categorySorted = {}
@@ -323,6 +326,20 @@ elseif mode == "remove" then
 			print("Nothing to do!")
 		end
 	end
+elseif mode == "list" then
+	--list all installed packages
+	local match = ".*"
+	if #args == 1 then
+		--list with matching.
+		match = args[1]
+	end
+	for name, info in pairs(package.installed) do
+		if info.version then
+			if string.match(name, match) then
+				print(name.." "..info.version)
+			end
+		end
+	end
 elseif mode == "fetch" then
 	print("Updating Installer")
 	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
@@ -383,7 +400,9 @@ elseif mode == "fetch" then
 		while args[1] == "fetch" do
 			table.remove(args, 1)
 		end
-		shell.run(shell.getRunningProgram(), unpack(args))
+		if #args > 0 then
+			shell.run(shell.getRunningProgram(), unpack(args))
+		end
 		return
 	end
 end
