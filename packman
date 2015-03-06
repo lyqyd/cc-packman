@@ -1,7 +1,6 @@
 local versionNumber = 1.3
 
 os.unloadAPI("package")
-if not package then if shell.resolveProgram("package") then os.loadAPI(shell.resolveProgram("package")) elseif fs.exists("usr/apis/package") then os.loadAPI("usr/apis/package") else error("Could not load package API!") end end
 
 local args = {...}
 
@@ -18,10 +17,14 @@ for i = 1, #args do
 	args[i] = string.lower(args[i])
 end
 
+if args[1] ~= "fetch" then
+	if not package then if shell.resolveProgram("package") then os.loadAPI(shell.resolveProgram("package")) elseif fs.exists("usr/apis/package") then os.loadAPI("usr/apis/package") else error("Could not load package API!") end end
+end
+
 local mode = ""
 local forced = false
 
-function resetScreen()
+local function resetScreen()
 	term.clear()
 	term.setCursorPos(1,1)
 	xlim, ylim = term.getSize()
@@ -35,34 +38,38 @@ function resetScreen()
 	end
 end
 
-function printError(errorText)
-	if term.isColor() then term.setTextColor(colors.red) end
-	print(errorText)
-	term.setTextColor(colors.white)
-	error()
+local printError, printWarning, printInformation
+
+if package then
+	function printError(errorText)
+		if term.isColor() then term.setTextColor(colors.red) end
+		print(errorText)
+		term.setTextColor(colors.white)
+		error()
+	end
+
+	package.printError = printError
+
+	function printWarning(warningText)
+		if term.isColor() then term.setTextColor(colors.yellow) end
+		print(warningText)
+		term.setTextColor(colors.white)
+	end
+
+	package.printWarning = printWarning
+
+	function printInformation(infoText)
+		if term.isColor() then term.setTextColor(colors.lime) end
+		print(infoText)
+		term.setTextColor(colors.white)
+	end
+
+	package.printInformation = printInformation
+
+	resetScreen()
+
+	package.load()
 end
-
-package.printError = printError
-
-function printWarning(warningText)
-	if term.isColor() then term.setTextColor(colors.yellow) end
-	print(warningText)
-	term.setTextColor(colors.white)
-end
-
-package.printWarning = printWarning
-
-function printInformation(infoText)
-	if term.isColor() then term.setTextColor(colors.lime) end
-	print(infoText)
-	term.setTextColor(colors.white)
-end
-
-package.printInformation = printInformation
-
-resetScreen()
-
-package.load()
 
 local categoryList = {}
 local categorySorted = {}
@@ -341,7 +348,7 @@ elseif mode == "list" then
 		end
 	end
 elseif mode == "fetch" then
-	print("Updating Installer")
+	print("Updating packman")
 	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
 	if remoteHandle then
 		local fileHandle = io.open(shell.getRunningProgram(), "w")
@@ -350,6 +357,19 @@ elseif mode == "fetch" then
 			fileHandle:close()
 		else
 			printWarning("Could not open file "..shell.getRunningProgram())
+		end
+	else
+		printWarning("Could not retrieve remote file.")
+	end
+	print("Updating package API")
+	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/package")
+	if remoteHandle then
+		local fileHandle = io.open("/usr/apis/package", "w")
+		if fileHandle then
+			fileHandle:write(remoteHandle.readAll())
+			fileHandle:close()
+		else
+			printWarning("Could not open file /usr/apis/package")
 		end
 	else
 		printWarning("Could not retrieve remote file.")
@@ -387,8 +407,6 @@ elseif mode == "fetch" then
 			else
 				printError("Failed to open repository list")
 			end
-			os.unloadAPI("package")
-			if not os.loadAPI(shell.resolveProgram("package")) then printError("Could not reload package API") end
 		else
 			printError("Could not write file: /etc/repolist")
 		end
