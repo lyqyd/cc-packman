@@ -173,12 +173,12 @@ end
 
 local downloadFunctions = {}
 
-downloadFunctions.raw = function(pack)
+downloadFunctions.raw = function(pack, env)
 	-- Delegate to local raw
 	return raw(pack.download.url, fs.combine(pack.target, pack.download.filename))
 end
 
-downloadFunctions.github = function(package)
+downloadFunctions.github = function(package, env)
 	local contents = lookupFunctions.github(package)
 	if not contents then return nil, "content fetch failure" end
 	local localTarget = package.target or ""
@@ -188,7 +188,7 @@ downloadFunctions.github = function(package)
 	return true
 end
 
-downloadFunctions.bitbucket = function(package)
+downloadFunctions.bitbucket = function(package, env)
 	local contents = lookupFunctions.bitbucket(package)
 	local localTarget = package.target or ""
 	for num, file in ipairs(contents) do
@@ -197,7 +197,7 @@ downloadFunctions.bitbucket = function(package)
 	return true
 end
 
-downloadFunctions.pastebin = function(pack)
+downloadFunctions.pastebin = function(pack, env)
 	return raw("http://pastebin.com/raw.php?i="..pack.download.url, fs.combine(pack.target, pack.download.filename))
 end
 
@@ -263,7 +263,7 @@ setmetatable(scriptEnv, {__index = _G})
 local Package = {
 	install = function(self, env)
 		if downloadFunctions[self.download.type] then
-			if not downloadFunctions[self.download.type](self) then return false end
+			if not downloadFunctions[self.download.type](self, env) then return false end
 		end
 		if self.setup then
 			local shell = env.shell
