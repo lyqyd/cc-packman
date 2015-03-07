@@ -140,14 +140,8 @@ local function createSingleFolder(path)
 	end
 end
 
-local downloadFunctions = {}
-
-downloadFunctions.raw = function(url, path, version)
-	if type(url) == "table" then
-		local pack = url
-		url = pack.download.url
-		path = fs.combine(pack.target, pack.download.filename)
-	end
+-- Local function to download a url raw
+local function raw(url, path, version)
 	printInformation("Fetching: "..url)
 	http.request(url)
 	while true do
@@ -177,12 +171,19 @@ downloadFunctions.raw = function(url, path, version)
 	end
 end
 
+local downloadFunctions = {}
+
+downloadFunctions.raw = function(pack)
+	-- Delegate to local raw
+	return raw(pack.download.url, fs.combine(pack.target, pack.download.filename))
+end
+
 downloadFunctions.github = function(package)
 	local contents = lookupFunctions.github(package)
 	if not contents then return nil, "content fetch failure" end
 	local localTarget = package.target or ""
 	for num, file in ipairs(contents) do
-		if not downloadFunctions.raw("https://raw.github.com/"..package.download.author.."/"..package.download.repository.."/master/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
+		if not raw("https://raw.github.com/"..package.download.author.."/"..package.download.repository.."/master/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
 	end
 	return true
 end
@@ -191,13 +192,13 @@ downloadFunctions.bitbucket = function(package)
 	local contents = lookupFunctions.bitbucket(package)
 	local localTarget = package.target or ""
 	for num, file in ipairs(contents) do
-		if not downloadFunctions.raw("https://bitbucket.org/"..package.download.author.."/"..package.download.repository.."/raw/"..package.download.branch.."/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
+		if not raw("https://bitbucket.org/"..package.download.author.."/"..package.download.repository.."/raw/"..package.download.branch.."/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
 	end
 	return true
 end
 
 downloadFunctions.pastebin = function(pack)
-	return downloadFunctions.raw("http://pastebin.com/raw.php?i="..pack.download.url, fs.combine(pack.target, pack.download.filename))
+	return raw("http://pastebin.com/raw.php?i="..pack.download.url, fs.combine(pack.target, pack.download.filename))
 end
 
 function updateDatabase(pack, files)
@@ -313,9 +314,9 @@ local Package = {
 				if file.version ~= findInstalledVersionByPath(self.repo.."/"..self.name, file.path) then
 					packAPI.removeFile(file.path)
 					if self.download.type == "github" then
-						if not downloadFunctions.raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/master/"..file.path, fs.combine(self.target, file.path), file.version) then return false end
+						if not raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/master/"..file.path, fs.combine(self.target, file.path), file.version) then return false end
 					elseif self.download.type == "bitbucket" then
-						if not downloadFunctions.raw("https://bitbucket.org/"..self.download.author.."/"..self.download.repository.."/raw/"..self.download.branch.."/"..file.path, fs.combine(self.target, file.path), file.version) then return false end
+						if not raw("https://bitbucket.org/"..self.download.author.."/"..self.download.repository.."/raw/"..self.download.branch.."/"..file.path, fs.combine(self.target, file.path), file.version) then return false end
 					end
 				end
 			end
