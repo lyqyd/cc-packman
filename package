@@ -59,6 +59,10 @@ local downloadTypes = {
 		url = true,
 		filename = true,
 	},
+	grin = {
+		author = true,
+		repository = true,
+	},
 }
 
 local lookupFunctions = {}
@@ -199,6 +203,10 @@ end
 
 downloadFunctions.pastebin = function(pack, env)
 	return raw("http://pastebin.com/raw.php?i="..pack.download.url, fs.combine(pack.target, pack.download.filename))
+end
+
+downloadFunctions.grin = function(package, env)
+	return env.shell.run("pastebin run VuBNx3va -u", package.download.author, "-r", package.download.repository, package.target)
 end
 
 function updateDatabase(pack, files)
