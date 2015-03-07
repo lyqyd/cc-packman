@@ -206,7 +206,16 @@ downloadFunctions.pastebin = function(pack, env)
 end
 
 downloadFunctions.grin = function(package, env)
-	return env.shell.run("pastebin run VuBNx3va -u", package.download.author, "-r", package.download.repository, package.target)
+	local status
+	parallel.waitForAny(function()
+		status = env.shell.run("pastebin run VuBNx3va -e -u", package.download.author, "-r", package.download.repository, fs.combine(package.target, package.name))
+	end, function()
+		while true do
+			local e, msg = os.pullEvent("grin_install_status")
+			printInformation(msg)
+		end
+	end)
+	return status
 end
 
 function updateDatabase(pack, files)
