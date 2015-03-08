@@ -25,17 +25,8 @@ local mode = ""
 local forced = false
 
 local function resetScreen()
-	term.clear()
-	term.setCursorPos(1,1)
-	xlim, ylim = term.getSize()
-	if xlim >= 9 then
-		term.setTextColor(colors.black)
-		term.setBackgroundColor(colors.white)
-		term.write(" PackMan"..string.rep(" ", xlim - 8))
-		term.setCursorPos(1,2)
-		term.setTextColor(colors.white)
-		term.setBackgroundColor(colors.black)
-	end
+	term.setTextColor(colors.white)
+	term.setBackgroundColor(colors.black)
 end
 
 local printError, printWarning, printInformation
@@ -67,7 +58,7 @@ if package then
 	package.printInformation = printInformation
 
 	resetScreen()
-
+    printInformation("Reading local repositories...")
 	package.load()
 end
 
@@ -199,7 +190,13 @@ if mode == "install" then
 				for k,v in pairs(package.list[result].dependencies) do
 					if not package.installed[k] then
 						installList[k] = true
-					end
+					else
+                        if k == result then
+                            printInformation("Package "..k.." already installed")
+                        else
+                            printInformation("Dependency "..k.." already installed")
+                        end
+                    end
 				end
 			end
 		end
