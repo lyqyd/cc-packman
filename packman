@@ -58,7 +58,7 @@ if package then
 	package.printInformation = printInformation
 
 	resetScreen()
-    printInformation("Reading local repositories...")
+	printInformation("Reading local repositories...")
 	package.load()
 end
 
@@ -191,12 +191,12 @@ if mode == "install" then
 					if not package.installed[k] then
 						installList[k] = true
 					else
-                        if k == result then
-                            printInformation("Package "..k.." already installed")
-                        else
-                            printInformation("Dependency "..k.." already installed")
-                        end
-                    end
+						if k == result then
+							printInformation("Package "..k.." already installed")
+						else
+							printInformation("Dependency "..k.." already installed")
+						end
+					end
 				end
 			end
 		end
