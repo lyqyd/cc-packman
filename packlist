@@ -81,7 +81,19 @@ name = setup
 		url = https://raw.github.com/lyqyd/cc-generalized-setup/master/setup
 		filename = setup
 	category = turtle gui
-	dependencies = main/location-api
+	dependencies = main/location
 	version = 0.1
 	size = 25045
+end
+
+name = easy-shell
+	type = pastebin
+		url = wzWFmaav
+		filename = easy-shell
+	setup = easy-shell install
+	cleanup = easy-shell remove
+	category = shell
+	dependencies = none
+	version = 0.1
+	size = 1585
 end

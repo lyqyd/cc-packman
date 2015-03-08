@@ -59,6 +59,10 @@ local downloadTypes = {
 		url = true,
 		filename = true,
 	},
+	grin = {
+		author = true,
+		repository = true,
+	},
 }
 
 local lookupFunctions = {}
@@ -140,14 +144,8 @@ local function createSingleFolder(path)
 	end
 end
 
-local downloadFunctions = {}
-
-downloadFunctions.raw = function(url, path, version)
-	if type(url) == "table" then
-		local pack = url
-		url = pack.download.url
-		path = fs.combine(pack.target, pack.download.filename)
-	end
+-- Local function to download a url raw
+local function raw(url, path, version)
 	printInformation("Fetching: "..url)
 	http.request(url)
 	while true do
@@ -177,27 +175,47 @@ downloadFunctions.raw = function(url, path, version)
 	end
 end
 
-downloadFunctions.github = function(package)
+local downloadFunctions = {}
+
+downloadFunctions.raw = function(pack, env)
+	-- Delegate to local raw
+	return raw(pack.download.url, fs.combine(pack.target, pack.download.filename))
+end
+
+downloadFunctions.github = function(package, env)
 	local contents = lookupFunctions.github(package)
 	if not contents then return nil, "content fetch failure" end
 	local localTarget = package.target or ""
 	for num, file in ipairs(contents) do
-		if not downloadFunctions.raw("https://raw.github.com/"..package.download.author.."/"..package.download.repository.."/master/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
+		if not raw("https://raw.github.com/"..package.download.author.."/"..package.download.repository.."/master/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
 	end
 	return true
 end
 
-downloadFunctions.bitbucket = function(package)
+downloadFunctions.bitbucket = function(package, env)
 	local contents = lookupFunctions.bitbucket(package)
 	local localTarget = package.target or ""
 	for num, file in ipairs(contents) do
-		if not downloadFunctions.raw("https://bitbucket.org/"..package.download.author.."/"..package.download.repository.."/raw/"..package.download.branch.."/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
+		if not raw("https://bitbucket.org/"..package.download.author.."/"..package.download.repository.."/raw/"..package.download.branch.."/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
 	end
 	return true
 end
 
-downloadFunctions.pastebin = function(pack)
-	return downloadFunctions.raw("http://pastebin.com/raw.php?i="..pack.download.url, fs.combine(pack.target, pack.download.filename))
+downloadFunctions.pastebin = function(pack, env)
+	return raw("http://pastebin.com/raw.php?i="..pack.download.url, fs.combine(pack.target, pack.download.filename))
+end
+
+downloadFunctions.grin = function(package, env)
+	local status
+	parallel.waitForAny(function()
+		status = env.shell.run("pastebin run VuBNx3va -e -u", package.download.author, "-r", package.download.repository, fs.combine(package.target, package.name))
+	end, function()
+		while true do
+			local e, msg = os.pullEvent("grin_install_status")
+			printInformation(msg)
+		end
+	end)
+	return status
 end
 
 function updateDatabase(pack, files)
@@ -262,7 +280,7 @@ setmetatable(scriptEnv, {__index = _G})
 local Package = {
 	install = function(self, env)
 		if downloadFunctions[self.download.type] then
-			if not downloadFunctions[self.download.type](self) then return false end
+			if not downloadFunctions[self.download.type](self, env) then return false end
 		end
 		if self.setup then
 			local shell = env.shell
@@ -279,7 +297,7 @@ local Package = {
 			local shell = env.shell
 			shell.run(fs.combine(self.target, self.cleanup))
 		end
-		local fileList = package.installed[self.name].files
+		local fileList = package.installed[self.repo.."/"..self.name].files
 		for i = #fileList, 1, -1 do
 			if fs.exists(fileList[i].path) then
 				if fs.isDir(fileList[i].path) then
@@ -291,7 +309,18 @@ local Package = {
 				end
 			end
 		end
-		package.installed[self.name] = nil
+		package.installed[self.name][self.repo] = nil
+		local othersWithName = false
+		for k, v in pairs(package.installed[self.name]) do
+			if v then
+				othersWithName = true
+				break
+			end
+		end
+		if not othersWithName then
+			package.installed[self.name] = nil
+		end
+		package.installed[self.repo.."/"..self.name] = nil
 		writeDatabase(self)
 	end,
 	upgrade = function(self, env)
@@ -299,12 +328,12 @@ local Package = {
 		if lookupFunctions[self.download.type] then
 			local contents = lookupFunctions[self.download.type](self)
 			for num, file in ipairs(contents) do
-				if file.version ~= findInstalledVersionByPath(self.name, file.path) then
+				if file.version ~= findInstalledVersionByPath(self.repo.."/"..self.name, file.path) then
 					packAPI.removeFile(file.path)
 					if self.download.type == "github" then
-						if not downloadFunctions.raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/master/"..file.path, fs.combine(self.target, file.path), file.version) then return false end
+						if not raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/master/"..file.path, fs.combine(self.target, file.path), file.version) then return false end
 					elseif self.download.type == "bitbucket" then
-						if not downloadFunctions.raw("https://bitbucket.org/"..self.download.author.."/"..self.download.repository.."/raw/"..self.download.branch.."/"..file.path, fs.combine(self.target, file.path), file.version) then return false end
+						if not raw("https://bitbucket.org/"..self.download.author.."/"..self.download.repository.."/raw/"..self.download.branch.."/"..file.path, fs.combine(self.target, file.path), file.version) then return false end
 					end
 				end
 			end
@@ -477,41 +506,43 @@ local function addPacks(file)
 	end
 end
 
-if fs.exists("/etc/repositories") then
-	for _, file in ipairs(fs.list("/etc/repositories")) do
-		addPacks(fs.combine("/etc/repositories", file))
+function load()
+	if fs.exists("/etc/repositories") then
+		for _, file in ipairs(fs.list("/etc/repositories")) do
+			addPacks(fs.combine("/etc/repositories", file))
+		end
 	end
-end
 
-if fs.exists("/etc/.installed") and fs.isDir("/etc/.installed") then
-	for _, repo in ipairs(fs.list("/etc/.installed")) do
-		for _, file in ipairs(fs.list(fs.combine("/etc/.installed", repo))) do
-			local name = repo.."/"..file
-			local handle = io.open(fs.combine(fs.combine("/etc/.installed", repo), file), "r")
-			if handle then
-				installed[name] = {files = {}}
-				local packVersion
-				for line in handle:lines() do
-					if not packVersion then
-						packVersion = line
-						installed[name].version = packVersion
-					else
-						local path, version = string.match(line, "([^;]+);(.*)")
-						if path and version then
-							installed[name].files[#installed[name].files + 1] = {path = path, version = version}
+	if fs.exists("/etc/.installed") and fs.isDir("/etc/.installed") then
+		for _, repo in ipairs(fs.list("/etc/.installed")) do
+			for _, file in ipairs(fs.list(fs.combine("/etc/.installed", repo))) do
+				local name = repo.."/"..file
+				local handle = io.open(fs.combine(fs.combine("/etc/.installed", repo), file), "r")
+				if handle then
+					installed[name] = {files = {}}
+					local packVersion
+					for line in handle:lines() do
+						if not packVersion then
+							packVersion = line
+							installed[name].version = packVersion
 						else
-							installed[name].files[#installed[name].files + 1] = {path = line, version = packVersion}
+							local path, version = string.match(line, "([^;]+);(.*)")
+							if path and version then
+								installed[name].files[#installed[name].files + 1] = {path = path, version = version}
+							else
+								installed[name].files[#installed[name].files + 1] = {path = line, version = packVersion}
+							end
 						end
 					end
-				end
-				handle:close()
-				if installed[file] then
-					installed[file][repo] = installed[name]
+					handle:close()
+					if installed[file] then
+						installed[file][repo] = installed[name]
+					else
+						installed[file] = {[repo] = installed[name]}
+					end
 				else
-					installed[file] = {[repo] = installed[name]}
+					printWarning("Couldn't open package db file: "..file)
 				end
-			else
-				printWarning("Couldn't open package db file: "..file)
 			end
 		end
 	end
