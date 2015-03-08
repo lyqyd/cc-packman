@@ -182,21 +182,21 @@ downloadFunctions.raw = function(pack, env)
 	return raw(pack.download.url, fs.combine(pack.target, pack.download.filename))
 end
 
-downloadFunctions.github = function(package, env)
-	local contents = lookupFunctions.github(package)
+downloadFunctions.github = function(pack, env)
+	local contents = lookupFunctions.github(pack)
 	if not contents then return nil, "content fetch failure" end
-	local localTarget = package.target or ""
+	local localTarget = pack.target or ""
 	for num, file in ipairs(contents) do
-		if not raw("https://raw.github.com/"..package.download.author.."/"..package.download.repository.."/master/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
+		if not raw("https://raw.github.com/"..pack.download.author.."/"..pack.download.repository.."/master/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
 	end
 	return true
 end
 
-downloadFunctions.bitbucket = function(package, env)
-	local contents = lookupFunctions.bitbucket(package)
-	local localTarget = package.target or ""
+downloadFunctions.bitbucket = function(pack, env)
+	local contents = lookupFunctions.bitbucket(pack)
+	local localTarget = pack.target or ""
 	for num, file in ipairs(contents) do
-		if not raw("https://bitbucket.org/"..package.download.author.."/"..package.download.repository.."/raw/"..package.download.branch.."/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
+		if not raw("https://bitbucket.org/"..pack.download.author.."/"..pack.download.repository.."/raw/"..pack.download.branch.."/"..file.path, fs.combine(localTarget, file.path), file.version) then return false end
 	end
 	return true
 end
