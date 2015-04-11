@@ -7,8 +7,8 @@ name = LyqydOS
 	cleanup = installer remove
 	dependencies = main/framebuffer main/configuration
 	target = /LyqydOS
-	version = 1.5
-	size = 143164
+	version = 1.6
+	size = 147067
 end
 
 name = LyqydNet
