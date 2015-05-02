@@ -1,0 +1,10 @@
+name = pocket-gps
+	type = pastebin
+		url = wQaGzaK7
+		filename = pgps
+	category = pocket gps
+	dependencies = none
+	target = /usr/bin
+	version = 0.1
+	size = 15718
+end
