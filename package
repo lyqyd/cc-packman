@@ -338,7 +338,7 @@ local Package = {
 				end
 			end
 		else
-			self:install()
+			self:install(env)
 		end
 	end,
 }
