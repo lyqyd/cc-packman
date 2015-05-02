@@ -115,6 +115,68 @@ local function newTransaction(pack, path, type, contents, version)
 	return transaction
 end
 
+local function executeTransactions(pack, transactions)
+	local name = pack.repo.."/"..pack.name
+	local installedFile = fs.combine(fs.combine("/etc/.installed", pack.repo), pack.name)
+	local installedData = {}
+	if installed[name] and fs.exists(installedFile)
+		local handle = io.open(installedFile, "r")
+		if handle then
+			for line in handle:lines() do
+				table.insert(installedData, line)
+			end
+			handle:close()
+
+			--strip version number if present
+			if #installedData > 1 then
+				table.remove(installeData, 1)
+			end
+		end
+	end
+
+	for i = 1, #transactions do
+		transactions[i]:finish()
+		--construct new line (or nil to remove entry, if present)
+		local newLine
+		if transactions[i].type == "writeFile" then
+			newLine = transactions[i].path..(transactions[i].version and ";"..transactions[i].version or "")
+		elseif transactions[i].type == "makeDirectory" then
+			newLine = transactions[i].path
+		end
+		local lineFound = false
+		for j = 1, #installedData do
+			if transactions[i].path == string.match(installedData[j], "^([^;]+)") then
+				--found the right entry, modify correctly now.
+				lineFound = true
+				if newLine then
+					installedData[j] = newLine
+				else
+					table.remove(installedData, j)
+				end
+				break
+			end
+		end
+		if not lineFound and newLine then
+			--didn't find a matching line in the loop, add a new line at the end.
+			table.insert(installedData, newLine)
+		end
+	end
+
+	--now write out file again, if any content exists for it.
+	if #installedData >= 1 then
+		table.insert(installedData, 1, tostring(pack.version))
+		if not fs.exists(fs.combine("/etc/.installed", pack.repo)) then fs.makeDir(fs.combine("/etc/.installed", pack.repo)) end
+		local handle = io.open(installedFile, "w")
+		if handle then
+			for k, v in ipairs(installedData) do
+				handle:write(v.."\n")
+			end
+			handle:close()
+		end
+	end
+end
+
+
 local lookupFunctions = {}
 
 lookupFunctions.github = function(package)
