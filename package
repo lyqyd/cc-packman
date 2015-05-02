@@ -1,24 +1,6 @@
 list = {}
 installed = {}
 
-local transactionQueue = {}
-
-local packAPI = {
-	pathList = {}
-}
-
-function packAPI.addFile(path, version)
-	table.insert(packAPI.pathList, {path = path, version = version})
-end
-
-function packAPI.removeFile(path)
-	for i = #packAPI.pathList, 1, -1 do
-		if packAPI.pathList[i].path == path then
-			table.remove(packAPI.pathList, i)
-		end
-	end
-end
-
 local function postStatus(type, text)
 	os.queueEvent("package_status", type, text)
 	while true do
@@ -39,29 +21,8 @@ local function printError(text)
 	postStatus("error", text)
 end
 
-local downloadTypes = {
-	github = {
-		author = true,
-		repository = true,
-	},
-	bitbucket = {
-		author = true,
-		repository = true,
-		branch = true,
-	},
-	pastebin = {
-		url = true,
-		filename = true,
-	},
-	raw = {
-		url = true,
-		filename = true,
-	},
-	grin = {
-		author = true,
-		repository = true,
-	},
-}
+local transactionQueue = {}
+local currentPackage
 
 local Transaction = {
 	writeFile = function(self)
@@ -81,14 +42,18 @@ local Transaction = {
 		return true
 	end,
 	makeDirectory = function(self)
-		printInformation("Creating directory "..self.path)
-		fs.makeDir(self.path)
-		return true
+		if not fs.exists(self.path) then
+			printInformation("Creating directory "..self.path)
+			fs.makeDir(self.path)
+		end
+		return fs.isDir(self.path)
 	end,
 	removeDirectory = function(self)
-		printInformation("Removing directory"..self.path)
-		fs.delete(self.path)
-		return true
+		if fs.exists(self.path) and fs.isDir(self.path) and #(fs.list(self.path)) == 0 then
+			printInformation("Removing directory "..self.path)
+			fs.delete(self.path)
+		end
+		return not fs.exists(self.path)
 	end,
 }
 function Transaction.finish(self)
@@ -115,11 +80,82 @@ local function newTransaction(pack, path, type, contents, version)
 	return transaction
 end
 
+local function prepareTQ(pack)
+	if not transactionQueue[pack.fullName] then transactionQueue[pack.fullName] = {} end
+end
+
+local packAPI = {
+	addFile = function(path, contents, version)
+		if not currentPackage then return false end
+		prepareTQ(currentPackage)
+		table.insert(transactionQueue[currentPackage.fullName], newTransaction(currentPackage, path, "addFile", contents, version))
+	end,
+	removeFile = function(path)
+		if not currentPackage then return false end
+		prepareTQ(currentPackage)
+		table.insert(transactionQueue[currentPackage.fullName], newTransaction(currentPackage, path, "removeFile"))
+	end,
+	makeDir = function(path)
+		if not currentPackage then return false end
+		prepareTQ(currentPackage)
+		table.insert(transactionQueue[currentPackage.fullName], newTransaction(currentPackage, path, "makeDirectory"))
+	end,
+	rmDir = function(path)
+		if not currentPackage then return false end
+		prepareTQ(currentPackage)
+		table.insert(transactionQueue[currentPackage.fullName], newTransaction(currentPackage, path, "removeDirectory"))
+	end,
+}
+
+local downloadTypes = {
+	github = {
+		author = true,
+		repository = true,
+	},
+	bitbucket = {
+		author = true,
+		repository = true,
+		branch = true,
+	},
+	pastebin = {
+		url = true,
+		filename = true,
+	},
+	raw = {
+		url = true,
+		filename = true,
+	},
+	grin = {
+		author = true,
+		repository = true,
+	},
+}
+
+local function findFileEntry(fileList, path)
+	local entryFound = false
+	for i = 1, #fileList do
+		if fileList[i].path == path then
+			entryFound = i
+			break
+		end
+	end
+	return entryFound
+end
+
+local function updateFileInfo(fileList, path, version)
+	local entry = findFileEntry(fileList, path)
+	if entry then
+		fileList[entry].path = path
+		fileList[entry].version = version
+	else
+		table.insert(fileList, {path = path, version = version})
+	end
+end
+
 local function executeTransactions(pack, transactions)
-	local name = pack.repo.."/"..pack.name
-	local installedFile = fs.combine(fs.combine("/etc/.installed", pack.repo), pack.name)
+	local installedFile = fs.combine("/etc/.installed", pack.fullName)
 	local installedData = {}
-	if installed[name] and fs.exists(installedFile)
+	if installed[pack.fullName] and fs.exists(installedFile) then
 		local handle = io.open(installedFile, "r")
 		if handle then
 			for line in handle:lines() do
@@ -129,9 +165,18 @@ local function executeTransactions(pack, transactions)
 
 			--strip version number if present
 			if #installedData > 1 then
-				table.remove(installeData, 1)
+				table.remove(installedData, 1)
 			end
 		end
+	end
+
+	--ensure installed table entry exists
+	if not package.installed[pack.fullName] then
+		package.installed[pack.fullName] = {
+			version = pack.version,
+			files = {},
+		}
+		if not package.installed[pack.name] then package.installed[pack.name] = {[pack.repo] = package.installed[pack.fullName]} end
 	end
 
 	for i = 1, #transactions do
@@ -140,8 +185,10 @@ local function executeTransactions(pack, transactions)
 		local newLine
 		if transactions[i].type == "writeFile" then
 			newLine = transactions[i].path..(transactions[i].version and ";"..transactions[i].version or "")
+			updateFileInfo(package.installed[pack.fullName].files, transactions[i].path, transactions[i].version)
 		elseif transactions[i].type == "makeDirectory" then
 			newLine = transactions[i].path
+			updateFileInfo(package.installed[pack.fullName].files, transactions[i].path)
 		end
 		local lineFound = false
 		for j = 1, #installedData do
@@ -152,6 +199,10 @@ local function executeTransactions(pack, transactions)
 					installedData[j] = newLine
 				else
 					table.remove(installedData, j)
+					local entry = findFileEntry(package.installed[pack.fullName].files, transactions[i].path)
+					if entry then
+						table.remove(package.installed[pack.fullName].files, entry)
+					end
 				end
 				break
 			end
@@ -173,8 +224,40 @@ local function executeTransactions(pack, transactions)
 			end
 			handle:close()
 		end
+	else
+		fs.delete(installedFile)
+
+		--remove entries from installed packages table if removing package.
+		package.installed[pack.name][pack.repo] = nil
+		local othersWithName = false
+		for k, v in pairs(package.installed[pack.name]) do
+			if v then
+				othersWithName = true
+				break
+			end
+		end
+		if not othersWithName then
+			package.installed[pack.name] = nil
+		end
+		package.installed[pack.fullName] = nil
 	end
 end
+
+
+function updateDatabase(pack, transactions, files)
+	local fullName = pack.repo.."/"..pack.name
+	installed[fullName] = {
+		version = pack.version,
+		files = {}
+	}
+	for i = 1, #transactions do
+		installed[fullName].files[i] = {path = transactions[i].path, version = transactions[i].version}
+	end
+	for i = 1, #files do
+		installed[fullName].files[#installed[fullName].files + 1] = files[i]
+	end
+end
+
 
 
 local lookupFunctions = {}
@@ -246,12 +329,11 @@ lookupFunctions.bitbucket = function(package)
 end
 
 local function createSingleFolder(pack, path)
-	local fullName = pack.repo.."/"..pack.name
 	if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
-		createSingleFolder(string.match(path, "(.-)/[^/]+$"))
-		table.insert(transactionQueue[fullName], newTransaction(pack, path, "makeDirectory"))
+		createSingleFolder(pack, string.match(path, "(.-)/[^/]+$"))
+		table.insert(transactionQueue[pack.fullName], newTransaction(pack, path, "makeDirectory"))
 	else
-		table.insert(transactionQueue[fullName], newTransaction(pack, path, "makeDirectory"))
+		table.insert(transactionQueue[pack.fullName], newTransaction(pack, path, "makeDirectory"))
 	end
 end
 
@@ -359,60 +441,6 @@ downloadFunctions.grin = function(pack, env)
 	return status
 end
 
-function updateDatabase(pack, transactions, files)
-	local fullName = pack.repo.."/"..pack.name
-	installed[fullName] = {
-		version = pack.version,
-		files = {}
-	}
-	for i = 1, #transactions do
-		installed[fullName].files[i] = {path = transactions[i].path, version = transactions[i].version}
-	end
-	for i = 1, #files do
-		installed[fullName].files[#installed[fullName].files + 1] = files[i]
-	end
-end
-
-function writeDatabase(pack)
-	if pack then
-		--update the entry of a specific pack
-		local name = pack.repo.."/"..pack.name
-		if installed[name] then
-			if not fs.exists(fs.combine("/etc/.installed", pack.repo)) then fs.makeDir(fs.combine("/etc/.installed", pack.repo)) end
-			local handle = io.open(fs.combine(fs.combine("/etc/.installed", pack.repo), pack.name), "w")
-			handle:write(installed[name].version.."\n")
-			for i = 1, #installed[name].files do
-				if installed[name].files[i].version then
-					handle:write(installed[name].files[i].path..";"..installed[name].files[i].version.."\n")
-				else
-					handle:write(installed[name].files[i].path.."\n")
-				end
-			end
-			handle:close()
-		else
-			fs.delete(fs.combine("/etc/.installed", name))
-		end
-	else
-		--write all the packages!
-		local packageNames = {}
-		--both installed
-		for name, info in pairs(installed) do
-			if info.version then
-				packageNames[name] = true
-			end
-		end
-		--and recently uninstalled
-		for _, repo in pairs(fs.list("/etc/.installed")) do
-			for _, file in pairs(fs.list(fs.combine("/etc/.installed", repo))) do
-				packageNames[repo.."/"..file] = true
-			end
-		end
-		for name in pairs(packageNames) do
-			writeDatabase(package.list[name])
-		end
-	end
-end
-
 local function findInstalledVersionByPath(packName, path)
 	for i, file in ipairs(package.installed[packName].files) do
 		if file.path == path then return file.version end
@@ -424,114 +452,107 @@ setmetatable(scriptEnv, {__index = _G})
 
 local Package = {
 	install = function(self, env)
-		local fullName = self.repo.."/"..self.name
-
 		if downloadFunctions[self.download.type] then
-			if not transactionQueue[fullName] then transactionQueue[fullName] = {} end
+			if not transactionQueue[self.fullName] then transactionQueue[self.fullName] = {} end
 			if not downloadFunctions[self.download.type](self, env) then return false end
 		else
 			return false
 		end
 
-		local queue = transactionQueue[fullName]
-		transactionQueue[fullName] = nil
-		for i = 1, #queue do
-			queue[i]:finish()
+		local queue = transactionQueue[self.fullName]
+		transactionQueue[self.fullName] = nil
+		if queue and #queue > 0 then
+			executeTransactions(self, queue)
 		end
 
-		packAPI.pathList = {}
+		--execute startup script, if present.
 		if self.setup then
 			local shell = env.shell
 			shell.run(fs.combine(self.target, self.setup))
+
+			--this must be done a second time to finalize any changes made by the install script.
+			local queue = transactionQueue[self.fullName]
+			transactionQueue[self.fullName] = nil
+			if queue and #queue > 0 then
+				executeTransactions(self, queue)
+			end
 		end
 
-		updateDatabase(self, queue, packAPI.pathList)
-		packAPI.pathList = {}
-		writeDatabase(self)
 		return true
 	end,
 	remove = function(self, env)
 		local fullName = self.repo.."/"..self.name
-		if not package.installed[fullName] then return false end
-		if not transactionQueue[fullName] then transactionQueue[fullName] = {} end
+		if not package.installed[self.fullName] then return false end
+		if not transactionQueue[self.fullName] then transactionQueue[self.fullName] = {} end
 
 		if self.cleanup then
 			local shell = env.shell
 			shell.run(fs.combine(self.target, self.cleanup))
 		end
 
-		local fileList = package.installed[fullName].files
+		local fileList = package.installed[self.fullName].files
 		for i = #fileList, 1, -1 do
 			if fs.exists(fileList[i].path) then
 				if fs.isDir(fileList[i].path) then
-					if #(fs.list(fileList[i].path)) == 0 then
-						table.insert(transactionQueue[fullName], newTransaction(self, fileList[i].path, "removeDirectory"))
-					end
+					table.insert(transactionQueue[self.fullName], newTransaction(self, fileList[i].path, "removeDirectory"))
 				else
-					table.insert(transactionQueue[fullName], newTransaction(self, fileList[i].path, "deleteFile"))
+					table.insert(transactionQueue[self.fullName], newTransaction(self, fileList[i].path, "deleteFile"))
 				end
 			end
 		end
 
-		local queue = transactionQueue[fullName]
-		transactionQueue[fullName] = nil
-		for i = 1, #queue do
-			queue[i]:finish()
-		end
+		local queue = transactionQueue[self.fullName]
+		transactionQueue[self.fullName] = nil
+		executeTransactions(self, queue)
 
-		package.installed[self.name][self.repo] = nil
-		local othersWithName = false
-		for k, v in pairs(package.installed[self.name]) do
-			if v then
-				othersWithName = true
-				break
-			end
-		end
-		if not othersWithName then
-			package.installed[self.name] = nil
-		end
-		package.installed[self.repo.."/"..self.name] = nil
-		writeDatabase(self)
+		return true
 	end,
 	upgrade = function(self, env)
-		local fullName = self.repo.."/"..self.name
-		if not package.installed[fullName] then return false end
-		if not transactionQueue[fullName] then transactionQueue[fullName] = {} end
+		if not package.installed[self.fullName] then return false end
+		if not transactionQueue[self.fullName] then transactionQueue[self.fullName] = {} end
 		if lookupFunctions[self.download.type] then
+			local updatedFiles = {}
 			local contents = lookupFunctions[self.download.type](self)
 			for num, file in ipairs(contents) do
-				if file.version ~= findInstalledVersionByPath(fullName, file.path) then
+				local path = fs.combine(self.target, file.path)
+				if file.version ~= findInstalledVersionByPath(self.fullName, path) then
+					if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
+						createSingleFolder(self, string.match(path, "(.-)/[^/]+$"))
+					end
 					if self.download.type == "github" then
-						local path = fs.combine(self.target, file.path)
 						local content = raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/master/"..file.path)
 						if content then
-							table.insert(transactionQueue[fullName], newTransaction(self, path, "writeFile", content, file.version))
+							table.insert(transactionQueue[self.fullName], newTransaction(self, path, "writeFile", content, file.version))
 						else
 							return false
 						end
 					elseif self.download.type == "bitbucket" then
-						local path = fs.combine(self.target, file.path)
 						local content = raw("https://bitbucket.org/"..self.download.author.."/"..self.download.repository.."/raw/"..self.download.branch.."/"..file.path)
 						if content then
-							table.insert(transactionQueue[fullName], newTransaction(self, path, "writeFile", content, file.version))
+							table.insert(transactionQueue[self.fullName], newTransaction(self, path, "writeFile", content, file.version))
 						else
 							return false
 						end
 					end
 				end
+				updatedFiles[path] = true
 			end
 
-			local queue = transactionQueue[fullName]
-			transactionQueue[fullName] = nil
-			for i = 1, #queue do
-				queue[i]:finish()
+			for i, fileInfo in ipairs(package.installed[self.fullName].files) do
+				if not updatedFiles[fileInfo.path] then
+					if not fs.isDir(fileInfo.path) or (fs.isDir(fileInfo.path) and #(fs.list(fileInfo.path)) == 0) then
+						table.insert(transactionQueue[self.fullName], newTransaction(self, fileInfo.path, "deleteFile"))
+					end
+				end
 			end
 
-			updateDatabase(self, queue, packAPI.pathList)
-			writeDatabase(self)
+			local queue = transactionQueue[self.fullName]
+			transactionQueue[self.fullName] = nil
+			executeTransactions(self, queue)
+
 			return true
 		else
-			return self:install(env)
+			return self:remove(env) and self:install(env)
 		end
 	end,
 }
@@ -542,6 +563,7 @@ function new(name, repo)
 	local p = {
 		name = name,
 		repo = repo,
+		fullName = repo.."/"..name,
 		version = "",
 		size = 0,
 		category = {},
