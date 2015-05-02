@@ -263,6 +263,7 @@ elseif mode == "update" then
 		for _, packageName in pairs(updateList) do
 			upgrade(packageName)
 		end
+		printInformation("Update complete!")
 	else
 		print("Nothing to do!")
 		return true
