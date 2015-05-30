@@ -80,8 +80,8 @@ name = vncd
 		filename = vncd
 	category = rednet shell remote
 	dependencies = lyqyd/framebuffer
-	version = 0.2
-	size = 4256
+	version = 0.3
+	size = 4400
 end
 
 name = framebuffer
