@@ -74,6 +74,16 @@ name = nsh-get
 	size = 599
 end
 
+name = nsh-auth
+	type = pastebin
+		url = ySEWczEr
+		filename = auth
+	category = rednet shell security
+	dependencies = lyqyd/nsh
+	version = 0.1
+	size = 228
+end
+
 name = vncd
 	type = raw
 		url = https://raw.github.com/lyqyd/cc-netshell/master/vncd
