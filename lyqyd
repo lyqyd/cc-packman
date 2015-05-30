@@ -45,13 +45,43 @@ name = touchpoint
 end
 
 name = nsh
-	type = github
-		author = lyqyd
-		repository = cc-netshell
+	type = raw
+		url = https://raw.github.com/lyqyd/cc-netshell/master/nsh
+		filename = nsh
 	category = rednet shell remote
 	dependencies = lyqyd/framebuffer
-	version = 0.7
-	size = 32510
+	version = 0.8
+	size = 23767
+end
+
+name = nsh-put
+	type = raw
+		url = https://raw.github.com/lyqyd/cc-netshell/master/put
+		filename = put
+	category = rednet shell utility
+	dependencies = lyqyd/nsh
+	version = 0.1
+	size = 762
+end
+
+name = nsh-get
+	type = raw
+		url = https://raw.github.com/lyqyd/cc-netshell/master/get
+		filename = get
+	category = rednet shell utility
+	dependencies = lyqyd/nsh
+	version = 0.1
+	size = 599
+end
+
+name = vncd
+	type = raw
+		url = https://raw.github.com/lyqyd/cc-netshell/master/vncd
+		filename = vncd
+	category = rednet shell remote
+	dependencies = lyqyd/framebuffer
+	version = 0.2
+	size = 4256
 end
 
 name = framebuffer
