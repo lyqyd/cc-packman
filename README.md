@@ -1,4 +1,4 @@
-# Packman - Package Management for ComputerCraft
+### Packman - Package Management for ComputerCraft
 
 # 1 - Setup
 
