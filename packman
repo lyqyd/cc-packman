@@ -4,11 +4,14 @@ os.unloadAPI("package")
 
 local args = {...}
 
-if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "fetch" and args[1] ~= "force" and args[1] ~= "list") then
+if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "fetch" and args[1] ~= "force" and args[1] ~= "list" and args[1] ~= "search") then
 	print("Usage:")
-	print("packman [force] <install|update|remove> <package name[s]>")
+	print("packman [force] install <package name[s]>")
+	print("packman [force] update <package name[s]>")
+	print("packman [force] remove <package name[s]>")
 	print("packman fetch")
 	print("packman list [pattern]")
+	print("packman search [pattern]")
 	return
 end
 
@@ -350,6 +353,20 @@ elseif mode == "list" then
 		if info.version then
 			if string.match(name, match) then
 				print(name.." "..info.version)
+			end
+		end
+	end
+elseif mode == "search" then
+	--search all available packages
+	local match = ".*"
+	if #args == 1 then
+		--search using a match
+		match = args[1]
+	end
+	for name, info in pairs(package.list) do
+		if info.version then
+			if string.match(name, match) then
+				print((package.installed[name] and "I " or "A " )..name.." "..info.version)
 			end
 		end
 	end
