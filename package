@@ -219,9 +219,10 @@ local downloadTypes = {
 		author = true,
 		repository = true,
 	},
+	meta = {},
 }
 
-local function executeTransactions(pack, transactions, rollback)
+local function executeTransactions(pack, transactions, removing)
 	local installedFile = fs.combine("/etc/.installed", pack.fullName)
 	local installedData = {}
 	if installed[pack.fullName] and fs.exists(installedFile) then
@@ -233,7 +234,7 @@ local function executeTransactions(pack, transactions, rollback)
 			handle:close()
 
 			--strip version number if present
-			if #installedData > 1 then
+			if #installedData >= 1 then
 				table.remove(installedData, 1)
 			end
 		end
@@ -278,18 +279,7 @@ local function executeTransactions(pack, transactions, rollback)
 		fileInfoUpdates[i]:finish()
 	end
 
-	--now write out file again, if any content exists for it.
-	if #installedData >= 1 then
-		table.insert(installedData, 1, tostring(pack.version))
-		if not fs.exists(fs.combine("/etc/.installed", pack.repo)) then fs.makeDir(fs.combine("/etc/.installed", pack.repo)) end
-		local handle = io.open(installedFile, "w")
-		if handle then
-			for k, v in ipairs(installedData) do
-				handle:write(v.."\n")
-			end
-			handle:close()
-		end
-	else
+	if removing and #installedData == 0 then
 		fs.delete(installedFile)
 
 		--remove entries from installed packages table if removing package.
@@ -305,6 +295,17 @@ local function executeTransactions(pack, transactions, rollback)
 			package.installed[pack.name] = nil
 		end
 		package.installed[pack.fullName] = nil
+	else
+		--write out file again, if any content exists for it.
+		table.insert(installedData, 1, tostring(pack.version))
+		if not fs.exists(fs.combine("/etc/.installed", pack.repo)) then fs.makeDir(fs.combine("/etc/.installed", pack.repo)) end
+		local handle = io.open(installedFile, "w")
+		if handle then
+			for k, v in ipairs(installedData) do
+				handle:write(v.."\n")
+			end
+			handle:close()
+		end
 	end
 	return true
 end
@@ -330,6 +331,7 @@ local updateTypes = {
 	grin = "replace",
 	raw = "overwrite",
 	pastebin = "overwrite",
+	meta = "overwrite",
 }
 
 local lookupFunctions = {}
@@ -509,6 +511,10 @@ downloadFunctions.grin = function(pack, env)
 	return status
 end
 
+downloadFunctions.meta = function(pack, env)
+	return true
+end
+
 local function findInstalledVersionByPath(packName, path)
 	for i, file in ipairs(package.installed[packName].files) do
 		if file.path == path then return file.version end
@@ -528,10 +534,9 @@ local Package = {
 		end
 
 		local queue = transactionQueue[self.fullName]
-		transactionQueue[self.fullName] = nil
-		if queue and #queue > 0 then
-			executeTransactions(self, queue)
-		end
+		transactionQueue[self.fullName] = {}
+		if not executeTransactions(self, queue) then return false end
+
 
 		--execute startup script, if present.
 		if self.setup then
@@ -541,15 +546,11 @@ local Package = {
 			--this must be done a second time to finalize any changes made by the install script.
 			local queue = transactionQueue[self.fullName]
 			transactionQueue[self.fullName] = nil
-			if queue and #queue > 0 then
-				executeTransactions(self, queue)
-			end
+			return executeTransactions(self, queue)
 		end
-
 		return true
 	end,
 	remove = function(self, env)
-		local fullName = self.repo.."/"..self.name
 		if not package.installed[self.fullName] then return false end
 		if not transactionQueue[self.fullName] then transactionQueue[self.fullName] = {} end
 
@@ -571,9 +572,7 @@ local Package = {
 
 		local queue = transactionQueue[self.fullName]
 		transactionQueue[self.fullName] = nil
-		executeTransactions(self, queue)
-
-		return true
+		return executeTransactions(self, queue, true)
 	end,
 	upgrade = function(self, env)
 		if not package.installed[self.fullName] then return false end
@@ -748,7 +747,7 @@ local function addPacks(file)
 					state = ""
 				elseif state == "main" then
 					--this line is the required entries for a valid repolist entry.
-					if entryTable.download.type and #entryTable.version > 0 and tonumber(entryTable.size) > 0 then
+					if entryTable.download.type and #entryTable.version > 0 and (tonumber(entryTable.size) > 0 or entryTable.download.type == "meta") then
 						local i
 						for name in pairs(entryTable.dependencies) do
 							i = true
