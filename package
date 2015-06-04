@@ -111,9 +111,9 @@ local Transaction = {
 		for i = 1, #self.contents do
 			if self.path == string.match(self.contents[i], "^([^;]+)") then
 				table.remove(self.contents, i)
-				local entry = findFileEntry(package.installed[pack.fullName].files, self.path)
+				local entry = findFileEntry(package.installed[self.pack.fullName].files, self.path)
 				if entry then
-					table.remove(package.installed[pack.fullName].files, entry)
+					table.remove(package.installed[self.pack.fullName].files, entry)
 				end
 				break
 			end
