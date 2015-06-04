@@ -22,9 +22,11 @@ Packages can be removed by running `packman remove <package-name> [additional-na
 
 Packages can be updated much like they are installed or removed, with `packman update [package-name(s)]`.  If no packages are specified, the update command will check all installed packages for updates.
 
-# 5 - Viewing Installed Packages
+# 5 - Viewing/Searching Packages
 
 Packman's list command can be used to view installed packages, with `packman list [mask]`.  The optional mask is used as a Lua string pattern, which means it will work with plain text searches as expected.
+
+You can also search the list of all packages with the search command.  It uses the same syntax as the list command, `packman search [mask]`.  This will display an "A" or an "I" before each package name to indicate whether it is installed (I) or available for installation (A).
 
 # 6 - Repositories
 
