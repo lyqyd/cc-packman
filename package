@@ -561,13 +561,12 @@ local Package = {
 
 		local fileList = package.installed[self.fullName].files
 		for i = #fileList, 1, -1 do
-			if fs.exists(fileList[i].path) then
-				if fs.isDir(fileList[i].path) then
-					table.insert(transactionQueue[self.fullName], newTransaction(self, fileList[i].path, "removeDirectory"))
-				else
-					table.insert(transactionQueue[self.fullName], newTransaction(self, fileList[i].path, "deleteFile"))
-				end
+			if fs.exists(fileList[i].path) and fs.isDir(fileList[i].path) then
+				table.insert(transactionQueue[self.fullName], newTransaction(self, fileList[i].path, "removeDirectory"))
+			else
+				table.insert(transactionQueue[self.fullName], newTransaction(self, fileList[i].path, "deleteFile"))
 			end
+
 		end
 
 		local queue = transactionQueue[self.fullName]
