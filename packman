@@ -260,10 +260,18 @@ elseif mode == "update" then
 				return true
 			end
 		end
+		local failureCount = 0
 		for _, packageName in pairs(updateList) do
-			upgrade(packageName)
+			if not upgrade(packageName) then
+				printWarning("Package "..packageName.." failed to update.")
+				failureCount = failureCount + 1
+			end
 		end
-		printInformation("Update complete!")
+		if failureCount > 0 then
+			printWarning(failureCount.." packages failed to update.")
+		else
+			printInformation("Update complete!")
+		end
 	else
 		print("Nothing to do!")
 		return true
