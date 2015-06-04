@@ -90,8 +90,9 @@ There are five download types available to fetch packages with.  Each of these t
 * grin
   * author
   * repository
+* meta
 
-Most of the arguments are self-explanatory.  Note that the pastebin `url` argument is just the pastebin code, not the entire url.  The `filename` arguments are used to specify the name of the file to be created locally (other download methods simply use the name of the file they are fetching), but should be just a name, not an absolute path.
+Most of the arguments are self-explanatory.  Note that the pastebin `url` argument is just the pastebin code, not the entire url.  The `filename` arguments are used to specify the name of the file to be created locally (other download methods simply use the name of the file they are fetching), but should be just a name, not an absolute path.  The `meta` download type can be used to install software groups with one command.  Simply specify a package using this download type and put the desired packages as dependencies.
 
 ### 6.1.3 - Version Number
 
