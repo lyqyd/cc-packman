@@ -79,6 +79,7 @@ There are five download types available to fetch packages with.  Each of these t
 * github
   * author
   * repository
+  * branch
 * bitbucket
   * author
   * repository
