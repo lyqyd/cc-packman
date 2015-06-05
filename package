@@ -201,6 +201,7 @@ local downloadTypes = {
 	github = {
 		author = true,
 		repository = true,
+		branch = true,
 	},
 	bitbucket = {
 		author = true,
@@ -339,7 +340,7 @@ local lookupFunctions = {}
 lookupFunctions.github = function(package)
 	local function getDirectoryContents(path)
 		local fType, fPath, fVer = {}, {}, {}
-		local response = http.get("https://api.github.com/repos/"..package.download.author.."/"..package.download.repository.."/contents/"..path)
+		local response = http.get("https://api.github.com/repos/"..package.download.author.."/"..package.download.repository.."/contents/"..path.."?ref="..package.download.branch)
 		if response then
 			response = response.readAll()
 			if response ~= nil then
@@ -454,7 +455,7 @@ downloadFunctions.github = function(pack, env)
 		if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
 			createSingleFolder(pack, string.match(path, "(.-)/[^/]+$"))
 		end
-		local content = raw("https://raw.github.com/"..pack.download.author.."/"..pack.download.repository.."/master/"..file.path)
+		local content = raw("https://raw.github.com/"..pack.download.author.."/"..pack.download.repository.."/"..pack.download.branch.."/"..file.path)
 		if content then
 			table.insert(transactionQueue[pack.fullName], newTransaction(pack, path, "writeFile", content, file.version))
 		else
@@ -586,7 +587,7 @@ local Package = {
 						createSingleFolder(self, string.match(path, "(.-)/[^/]+$"))
 					end
 					if self.download.type == "github" then
-						local content = raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/master/"..file.path)
+						local content = raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/"..pack.download.branch.."/"..file.path)
 						if content then
 							table.insert(transactionQueue[self.fullName], newTransaction(self, path, "writeFile", content, file.version))
 						else
