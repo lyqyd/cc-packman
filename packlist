@@ -6,6 +6,6 @@ name = easy-shell
 	cleanup = easy-shell remove
 	category = shell
 	dependencies = none
-	version = 0.1
-	size = 1585
+	version = 0.2
+	size = 1626
 end
