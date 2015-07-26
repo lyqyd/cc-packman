@@ -5,13 +5,13 @@ os.unloadAPI("package")
 local args = {...}
 
 if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "fetch" and args[1] ~= "force" and args[1] ~= "list" and args[1] ~= "search") then
-	print("Usage:")
-	print("packman [force] install <package name[s]>")
-	print("packman [force] update <package name[s]>")
-	print("packman [force] remove <package name[s]>")
-	print("packman fetch")
-	print("packman list [pattern]")
-	print("packman search [pattern]")
+	io.write("Usage:\n")
+	io.write("packman [force] install <package name[s]>\n")
+	io.write("packman [force] update <package name[s]>\n")
+	io.write("packman [force] remove <package name[s]>\n")
+	io.write("packman fetch\n")
+	io.write("packman list [pattern]\n")
+	io.write("packman search [pattern]\n")
 	return
 end
 
@@ -37,7 +37,7 @@ local printError, printWarning, printInformation
 if package then
 	function printError(errorText)
 		if term.isColor() then term.setTextColor(colors.red) end
-		print(errorText)
+		io.write(errorText.."\n")
 		term.setTextColor(colors.white)
 		error()
 	end
@@ -46,7 +46,7 @@ if package then
 
 	function printWarning(warningText)
 		if term.isColor() then term.setTextColor(colors.yellow) end
-		print(warningText)
+		io.write(warningText.."\n")
 		term.setTextColor(colors.white)
 	end
 
@@ -54,7 +54,7 @@ if package then
 
 	function printInformation(infoText)
 		if term.isColor() then term.setTextColor(colors.lime) end
-		print(infoText)
+		io.write(infoText.."\n")
 		term.setTextColor(colors.white)
 	end
 
@@ -112,13 +112,13 @@ local function lookupPackage(name, installedOnly)
 			end
 		end
 		if #options > 1 then
-			print("Package "..name.." is ambiguous.")
+			io.write("Package "..name.." is ambiguous.\n")
 			for i = 1, #options do
 				write(tostring(i)..": "..options[i].."  ")
 			end
-			print("")
-			print("Select option: ")
-			local selection = read()
+			io.write("\n")
+			io.write("Select option: \n")
+			local selection = io.read()
 			if tonumber(selection) and options[tonumber(selection)] then
 				return options[tonumber(selection)].."/"..name
 			end
@@ -209,9 +209,9 @@ if mode == "install" then
 		end
 		if #installString > 0 then
 			if not forced then
-				print("The following packages will be installed: "..installString)
-				print("Continue? (Y/n)")
-				local input = read()
+				io.write("The following packages will be installed: "..installString.."\n")
+				io.write("Continue? (Y/n)\n")
+				local input = io.read()
 				if string.sub(input:lower(), 1, 1) == "n" then
 					return true
 				end
@@ -256,9 +256,9 @@ elseif mode == "update" then
 			updateString = updateString..updateList[i].." "
 		end
 		if not forced then
-			print("The following packages will be updated: "..updateString)
-			print("Continue? (Y/n)")
-			local input = read()
+			io.write("The following packages will be updated: "..updateString.."\n")
+			io.write("Continue? (Y/n)\n")
+			local input = io.read()
 			if string.sub(input:lower(), 1, 1) == "n" then
 				return true
 			end
@@ -276,7 +276,7 @@ elseif mode == "update" then
 			printInformation("Update complete!")
 		end
 	else
-		print("Nothing to do!")
+		io.write("Nothing to do!\n")
 		return true
 	end
 elseif mode == "remove" then
@@ -320,12 +320,12 @@ elseif mode == "remove" then
 		end
 		if #removeString > 0 then
 			if not forced then
-				print("The following packages will be removed: "..removeString)
+				io.write("The following packages will be removed: "..removeString.."\n")
 				if #dependeesString > 0 then
-					print("The following packages will also be removed due to missing dependencies: "..dependeesString)
+					io.write("The following packages will also be removed due to missing dependencies: "..dependeesString.."\n")
 				end
-				print("Continue? (y/N)")
-				local input = read()
+				io.write("Continue? (y/N)\n")
+				local input = io.read()
 				if string.sub(input:lower(), 1, 1) ~= "y" then
 					return true
 				end
@@ -339,7 +339,7 @@ elseif mode == "remove" then
 				remove(pName)
 			end
 		else
-			print("Nothing to do!")
+			io.write("Nothing to do!\n")
 		end
 	end
 elseif mode == "list" then
@@ -352,7 +352,7 @@ elseif mode == "list" then
 	for name, info in pairs(package.installed) do
 		if info.version then
 			if string.match(name, match) then
-				print(name.." "..info.version)
+				io.write(name.." "..info.version.."\n")
 			end
 		end
 	end
@@ -366,7 +366,7 @@ elseif mode == "search" then
 	for name, info in pairs(package.list) do
 		if info.version then
 			if string.match(name, match) then
-				print((package.installed[name] and "I " or "A " )..name.." "..info.version)
+				io.write((package.installed[name] and "I " or "A " )..name.." "..info.version.."\n")
 			end
 		end
 	end
@@ -375,7 +375,7 @@ elseif mode == "fetch" then
 	if package and not pack then
 		queue = package.newTransactionQueue("main/packman")
 	end
-	print("Updating packman")
+	io.write("Updating packman\n")
 	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
 	if remoteHandle then
 		if pack then
@@ -395,7 +395,7 @@ elseif mode == "fetch" then
 	else
 		printWarning("Could not retrieve remote file.")
 	end
-	print("Updating package API")
+	io.write("Updating package API\n")
 	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/package")
 	if remoteHandle then
 		if pack then
@@ -418,7 +418,7 @@ elseif mode == "fetch" then
 	else
 		printWarning("Could not retrieve remote file.")
 	end
-	print("Fetching Repository List")
+	io.write("Fetching Repository List\n")
 	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
 	if remoteHandle then
 		if pack then
@@ -454,7 +454,7 @@ elseif mode == "fetch" then
 			for line in handle:lines() do
 				local file, url = string.match(line, "^(%S*)%s*(.*)")
 				if file and url then
-					print("Fetching Repository: "..file)
+					io.write("Fetching Repository: "..file.."\n")
 					local remoteHandle = http.get(url)
 					if remoteHandle then
 						if pack then
