@@ -170,33 +170,6 @@ local function newTransaction(pack, path, type, contents, version)
 	return transaction
 end
 
-local function prepareTQ(pack)
-	if not transactionQueue[pack.fullName] then transactionQueue[pack.fullName] = {} end
-end
-
-local packAPI = {
-	addFile = function(path, contents, version)
-		if not currentPackage then return false end
-		prepareTQ(currentPackage)
-		table.insert(transactionQueue[currentPackage.fullName], newTransaction(currentPackage, path, "addFile", contents, version))
-	end,
-	removeFile = function(path)
-		if not currentPackage then return false end
-		prepareTQ(currentPackage)
-		table.insert(transactionQueue[currentPackage.fullName], newTransaction(currentPackage, path, "removeFile"))
-	end,
-	makeDir = function(path)
-		if not currentPackage then return false end
-		prepareTQ(currentPackage)
-		table.insert(transactionQueue[currentPackage.fullName], newTransaction(currentPackage, path, "makeDirectory"))
-	end,
-	rmDir = function(path)
-		if not currentPackage then return false end
-		prepareTQ(currentPackage)
-		table.insert(transactionQueue[currentPackage.fullName], newTransaction(currentPackage, path, "removeDirectory"))
-	end,
-}
-
 local TransQueue = {
 	addFile = function(self, path, contents, version)
 		table.insert(self.transactions, newTransaction(self.pack, path, "writeFile", contents, version))
