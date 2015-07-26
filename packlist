@@ -1,3 +1,14 @@
+name = packman
+	type = raw
+		url = https://raw.githubusercontent.com/lyqyd/cc-packman/master/packman
+		filename = packman
+	setup = packman fetch
+	category = utility
+	dependencies = none
+	version = 0.1
+	size = 12471
+end
+
 name = easy-shell
 	type = pastebin
 		url = wzWFmaav
