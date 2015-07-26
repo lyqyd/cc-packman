@@ -434,7 +434,7 @@ downloadFunctions.raw = function(pack, env, queue)
 	-- Delegate to local raw
 	local path = fs.combine(pack.target, pack.download.filename)
 
-	if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
+	if string.match(path, "(.-)/[^/]+$") then
 		queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 	end
 	local content = raw(pack.download.url)
@@ -452,7 +452,7 @@ downloadFunctions.github = function(pack, env, queue)
 	local localTarget = pack.target or ""
 	for num, file in ipairs(contents) do
 		local path = fs.combine(localTarget, file.path)
-		if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
+		if string.match(path, "(.-)/[^/]+$") then
 			queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 		end
 		local content = raw("https://raw.github.com/"..pack.download.author.."/"..pack.download.repository.."/"..pack.download.branch.."/"..file.path)
@@ -470,7 +470,7 @@ downloadFunctions.bitbucket = function(pack, env, queue)
 	local localTarget = pack.target or ""
 	for num, file in ipairs(contents) do
 		local path = fs.combine(localTarget, file.path)
-		if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
+		if string.match(path, "(.-)/[^/]+$") then
 			queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 		end
 		local content = raw("https://bitbucket.org/"..pack.download.author.."/"..pack.download.repository.."/raw/"..pack.download.branch.."/"..file.path)
@@ -486,7 +486,7 @@ end
 downloadFunctions.pastebin = function(pack, env, queue)
 	local path = fs.combine(pack.target, pack.download.filename) 
 
-	if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
+	if string.match(path, "(.-)/[^/]+$") then
 		queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 	end
 	local content = raw("http://pastebin.com/raw.php?i="..pack.download.url)
@@ -579,7 +579,7 @@ local Package = {
 			for num, file in ipairs(contents) do
 				local path = fs.combine(self.target, file.path)
 				if file.version ~= findInstalledVersionByPath(self.fullName, path) then
-					if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
+					if string.match(path, "(.-)/[^/]+$") then
 						queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 					end
 					if self.download.type == "github" then
