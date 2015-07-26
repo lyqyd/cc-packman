@@ -178,7 +178,12 @@ local TransQueue = {
 		table.insert(self.transactions, newTransaction(self.pack, path, "removeFile"))
 	end,
 	makeDir = function(self, path)
-		table.insert(self.transactions, newTransaction(self.pack, path, "makeDirectory"))
+		if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
+			self:makeDir(string.match(path, "(.-)/[^/]+$"))
+			table.insert(self.transactions, newTransaction(self.pack, path, "makeDirectory"))
+		else
+			table.insert(self.transactions, newTransaction(self.pack, path, "makeDirectory"))
+		end
 	end,
 	removeDir = function(self, path)
 		table.insert(self.transactions, newTransaction(self.pack, path, "removeDirectory"))
@@ -510,15 +515,6 @@ lookupFunctions.bitbucket = function(package)
 	return addDirectoryContents("/", {})
 end
 
-local function createSingleFolder(queue, path)
-	if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
-		createSingleFolder(queue, string.match(path, "(.-)/[^/]+$"))
-		queue:makeDir(path)
-	else
-		queue:makeDir(path)
-	end
-end
-
 -- Local function to download a url raw
 local function raw(url)
 	printInformation("Fetching: "..url)
@@ -542,7 +538,7 @@ downloadFunctions.raw = function(pack, env, queue)
 	local path = fs.combine(pack.target, pack.download.filename)
 
 	if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
-		createSingleFolder(queue, string.match(path, "(.-)/[^/]+$"))
+		queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 	end
 	local content = raw(pack.download.url)
 	if content then
@@ -560,7 +556,7 @@ downloadFunctions.github = function(pack, env, queue)
 	for num, file in ipairs(contents) do
 		local path = fs.combine(localTarget, file.path)
 		if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
-			createSingleFolder(queue, string.match(path, "(.-)/[^/]+$"))
+			queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 		end
 		local content = raw("https://raw.github.com/"..pack.download.author.."/"..pack.download.repository.."/"..pack.download.branch.."/"..file.path)
 		if content then
@@ -578,7 +574,7 @@ downloadFunctions.bitbucket = function(pack, env, queue)
 	for num, file in ipairs(contents) do
 		local path = fs.combine(localTarget, file.path)
 		if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
-			createSingleFolder(queue, string.match(path, "(.-)/[^/]+$"))
+			queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 		end
 		local content = raw("https://bitbucket.org/"..pack.download.author.."/"..pack.download.repository.."/raw/"..pack.download.branch.."/"..file.path)
 		if content then
@@ -594,7 +590,7 @@ downloadFunctions.pastebin = function(pack, env, queue)
 	local path = fs.combine(pack.target, pack.download.filename) 
 
 	if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
-		createSingleFolder(queue, string.match(path, "(.-)/[^/]+$"))
+		queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 	end
 	local content = raw("http://pastebin.com/raw.php?i="..pack.download.url)
 	if content then
@@ -687,7 +683,7 @@ local Package = {
 				local path = fs.combine(self.target, file.path)
 				if file.version ~= findInstalledVersionByPath(self.fullName, path) then
 					if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
-						createSingleFolder(queue, string.match(path, "(.-)/[^/]+$"))
+						queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 					end
 					if self.download.type == "github" then
 						local content = raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/"..pack.download.branch.."/"..file.path)
