@@ -335,20 +335,6 @@ local downloadTypes = {
 	meta = {},
 }
 
-function updateDatabase(pack, transactions, files)
-	local fullName = pack.repo.."/"..pack.name
-	installed[fullName] = {
-		version = pack.version,
-		files = {}
-	}
-	for i = 1, #transactions do
-		installed[fullName].files[i] = {path = transactions[i].path, version = transactions[i].version}
-	end
-	for i = 1, #files do
-		installed[fullName].files[#installed[fullName].files + 1] = files[i]
-	end
-end
-
 local updateTypes = {
 	github = "incremental",
 	bitbucket = "incremental",
