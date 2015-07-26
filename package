@@ -568,7 +568,7 @@ local Package = {
 
 		if self.cleanup then
 			local queue = newTransactionQueue(self.fullName, true)
-			os.run({shell = env.shell, packman = queue:env(), pack = queue:env()}, fs.combine(self.target, self.setup))
+			os.run({shell = env.shell, packman = queue:env(), pack = queue:env()}, fs.combine(self.target, self.cleanup))
 			if not queue:finish() then return false end
 		end
 
