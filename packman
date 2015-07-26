@@ -4,28 +4,74 @@ os.unloadAPI("package")
 
 local args = {...}
 
-if #args < 1 or (args[1] ~= "install" and args[1] ~= "update" and args[1] ~= "remove" and args[1] ~= "fetch" and args[1] ~= "force" and args[1] ~= "list" and args[1] ~= "search") then
+local opwords = {
+	install = true,
+	remove = true,
+	update = true,
+	list = true,
+	search = true,
+}
+
+local argwords = {
+	fetch = true,
+	force = true,
+	target = 1,
+}
+
+if #args < 1 or (not opwords[args[1]] and not argwords[args[1]]) then
 	io.write("Usage:\n")
-	io.write("packman [force] install <package name[s]>\n")
-	io.write("packman [force] update <package name[s]>\n")
-	io.write("packman [force] remove <package name[s]>\n")
-	io.write("packman fetch\n")
+	io.write("packman [options] install <package name[s]>\n")
+	io.write("packman [options] update <package name[s]>\n")
+	io.write("packman [options] remove <package name[s]>\n")
 	io.write("packman list [pattern]\n")
 	io.write("packman search [pattern]\n")
+	io.write("\n")
+	io.write("Options:\n")
+	io.write("fetch\n")
+	io.write("    Update repository and package lists before performing operations (can be used without a separate operation)\n")
+	io.write("force\n")
+	io.write("    Force yes answers when manipulating packages\n")
+	io.write("target <directory>\n")
+	io.write("    Set root directory to install packages in\n")
 	return
-end
-
---lower all arguments
-for i = 1, #args do
-	args[i] = string.lower(args[i])
-end
-
-if args[1] ~= "fetch" then
-	if not package then if shell.resolveProgram("package") then os.loadAPI(shell.resolveProgram("package")) elseif fs.exists("usr/apis/package") then os.loadAPI("usr/apis/package") else error("Could not load package API!") end end
 end
 
 local mode = ""
 local forced = false
+local target = "/"
+local fetch = false
+local argState = nil
+local argCount = 0
+local operation = {options = {}, arguments = {}}
+
+--lower all arguments
+for i = 1, #args do
+	args[i] = string.lower(args[i])
+	if argState == nil and args[i] == "fetch" then fetch = true end
+	if argState == nil and args[i] == "force" then forced = true end
+
+	if argwords[args[i]] and type(argwords[args[i]]) == "number" then
+		operation.options[args[i]] = {}
+		argState = args[i]
+		argCount = argwords[args[i]]
+	elseif opwords[args[i]] then
+		mode = args[i]
+		argState = "arguments"
+		argCount = 0
+	elseif argState and argCount > 0 then
+		--option arguments
+		table.insert(operation.options[argState], args[i])
+		argCount = argCount - 1
+		if argCount == 0 then argState = nil
+	elseif argState == "arguments" then
+		--operation arguments
+		table.insert(operation.arguments, args[i])
+	end
+end
+
+if operations.options.target then
+	target = operations.options.target[1]
+end
 
 local function resetScreen()
 	term.setTextColor(colors.white)
@@ -34,41 +80,50 @@ end
 
 local printError, printWarning, printInformation
 
-if package then
-	function printError(errorText)
-		if term.isColor() then term.setTextColor(colors.red) end
-		io.write(errorText.."\n")
-		term.setTextColor(colors.white)
-		error()
+local function loadPackageAPI()
+	if not package then if shell.resolveProgram("package") then os.loadAPI(shell.resolveProgram("package")) elseif fs.exists("usr/apis/package") then os.loadAPI("usr/apis/package") else error("Could not load package API!") end end
+
+	if package then
+		function printError(errorText)
+			if term.isColor() then term.setTextColor(colors.red) end
+			io.write(errorText.."\n")
+			term.setTextColor(colors.white)
+			error()
+		end
+
+		package.printError = printError
+
+		function printWarning(warningText)
+			if term.isColor() then term.setTextColor(colors.yellow) end
+			io.write(warningText.."\n")
+			term.setTextColor(colors.white)
+		end
+
+		package.printWarning = printWarning
+
+		function printInformation(infoText)
+			if term.isColor() then term.setTextColor(colors.lime) end
+			io.write(infoText.."\n")
+			term.setTextColor(colors.white)
+		end
+
+		package.printInformation = printInformation
+
+		resetScreen()
+		printInformation("Reading installed database...")
+		package.installRoot = target
+		package.load()
 	end
+end
 
-	package.printError = printError
-
-	function printWarning(warningText)
-		if term.isColor() then term.setTextColor(colors.yellow) end
-		io.write(warningText.."\n")
-		term.setTextColor(colors.white)
-	end
-
-	package.printWarning = printWarning
-
-	function printInformation(infoText)
-		if term.isColor() then term.setTextColor(colors.lime) end
-		io.write(infoText.."\n")
-		term.setTextColor(colors.white)
-	end
-
-	package.printInformation = printInformation
-
-	resetScreen()
-	printInformation("Reading local repositories...")
-	package.load()
+if #mode > 0 then
+	loadPackageAPI()
 end
 
 local categoryList = {}
 local categorySorted = {}
 
-if args[1] ~= "fetch" then
+if #mode > 0 then
 	for n, v in pairs(package.list) do
 		if v.category then
 			for category in pairs(v.category) do
@@ -175,11 +230,124 @@ local function upgrade(name)
 	return raw_package_operation(name, "upgrade")
 end
 
-local mode = table.remove(args, 1)
+if fetch then
+	local queue
+	if package and not pack then
+		queue = package.newTransactionQueue("main/packman")
+	end
+	io.write("Updating packman\n")
+	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
+	if remoteHandle then
+		if pack then
+			pack.addFile(shell.getRunningProgram(), remoteHandle.readAll())
+		elseif queue then
+			queue:addFile(shell.getRunningProgram(), remoteHandle.readAll())
+		else
+			local fileHandle = io.open(shell.getRunningProgram(), "w")
+			if fileHandle then
+				fileHandle:write(remoteHandle.readAll())
+				fileHandle:close()
+			else
+				printWarning("Could not write file "..shell.getRunningProgram())
+			end
+		end
+		remoteHandle.close()
+	else
+		printWarning("Could not retrieve remote file.")
+	end
+	io.write("Updating package API\n")
+	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/package")
+	if remoteHandle then
+		if pack then
+			pack.makeDir("/usr/apis")
+			pack.addFile("/usr/apis/package", remoteHandle.readAll())
+		elseif queue then
+			queue:makeDir("/usr/apis")
+			queue:addFile("/usr/apis/package", remoteHandle.readAll())
+		else
+			if not fs.exists("/usr/apis") then fs.makeDir("/usr/apis") end
+			local fileHandle = io.open("/usr/apis/package", "w")
+			if fileHandle then
+				fileHandle:write(remoteHandle.readAll())
+				fileHandle:close()
+			else
+				printWarning("Could not write file /usr/apis/package")
+			end
+		end
+		remoteHandle.close()
+	else
+		printWarning("Could not retrieve remote file.")
+	end
+	io.write("Fetching Repository List\n")
+	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
+	if remoteHandle then
+		if pack then
+			pack.makeDir("/etc")
+			pack.addFile("/etc/repolist", remoteHandle.readAll())
+		elseif queue then
+			queue:makeDir("/etc")
+			queue:addFile("/etc/repolist", remoteHandle.readAll())
+		else
+			local fileHandle = io.open("/etc/repolist", "w")
+			if fileHandle then
+				fileHandle:write(remoteHandle.readAll())
+				fileHandle:close()
+			else
+				printWarning("Could not write file /etc/repolist")
+			end
+		end
+		remoteHandle.close()
+	else
+		printWarning("could not retrieve remote file.")
+	end
+	if fs.exists("/etc/repolist") then
+		if pack then
+			pack.makeDir("/etc/repositories")
+		elseif queue then
+			queue:makeDir("/etc/repositories")
+		else
+			if not fs.exists("/etc/repositories") then fs.makeDir("/etc/repositories") end
+		end
 
-if mode == "force" then
-	forced = true
-	mode = table.remove(args, 1)
+		local handle = io.open("/etc/repolist", "r")
+		if handle then
+			for line in handle:lines() do
+				local file, url = string.match(line, "^(%S*)%s*(.*)")
+				if file and url then
+					io.write("Fetching Repository: "..file.."\n")
+					local remoteHandle = http.get(url)
+					if remoteHandle then
+						if pack then
+							pack.addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
+						elseif queue then
+							queue:addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
+						else
+							local fileHandle = io.open(fs.combine("/etc/repositories", file), "w")
+							if fileHandle then
+								fileHandle:write(remoteHandle.readAll())
+								fileHandle:close()
+							else
+								printWarning("Could not write file: "..fs.combine("/etc/repositories", file))
+							end
+						end
+						remoteHandle.close()
+					else
+						printWarning("Could not retrieve remote file: "..file)
+					end
+				end
+			end
+		else
+			printError("Failed to open repository list")
+		end
+	end
+
+	if queue then
+		queue:finish()
+	end
+
+	--reload package API.
+	os.unloadAPI("package")
+	loadPackageAPI()
 end
 
 if mode == "install" then
@@ -370,133 +538,4 @@ elseif mode == "search" then
 			end
 		end
 	end
-elseif mode == "fetch" then
-	local queue
-	if package and not pack then
-		queue = package.newTransactionQueue("main/packman")
-	end
-	io.write("Updating packman\n")
-	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
-	if remoteHandle then
-		if pack then
-			pack.addFile(shell.getRunningProgram(), remoteHandle.readAll())
-		elseif queue then
-			queue:addFile(shell.getRunningProgram(), remoteHandle.readAll())
-		else
-			local fileHandle = io.open(shell.getRunningProgram(), "w")
-			if fileHandle then
-				fileHandle:write(remoteHandle.readAll())
-				fileHandle:close()
-			else
-				printWarning("Could not write file "..shell.getRunningProgram())
-			end
-		end
-		remoteHandle.close()
-	else
-		printWarning("Could not retrieve remote file.")
-	end
-	io.write("Updating package API\n")
-	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/package")
-	if remoteHandle then
-		if pack then
-			pack.makeDir("/usr/apis")
-			pack.addFile("/usr/apis/package", remoteHandle.readAll())
-		elseif queue then
-			queue:makeDir("/usr/apis")
-			queue:addFile("/usr/apis/package", remoteHandle.readAll())
-		else
-			if not fs.exists("/usr/apis") then fs.makeDir("/usr/apis") end
-			local fileHandle = io.open("/usr/apis/package", "w")
-			if fileHandle then
-				fileHandle:write(remoteHandle.readAll())
-				fileHandle:close()
-			else
-				printWarning("Could not write file /usr/apis/package")
-			end
-		end
-		remoteHandle.close()
-	else
-		printWarning("Could not retrieve remote file.")
-	end
-	io.write("Fetching Repository List\n")
-	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
-	if remoteHandle then
-		if pack then
-			pack.makeDir("/etc")
-			pack.addFile("/etc/repolist", remoteHandle.readAll())
-		elseif queue then
-			queue:makeDir("/etc")
-			queue:addFile("/etc/repolist", remoteHandle.readAll())
-		else
-			local fileHandle = io.open("/etc/repolist", "w")
-			if fileHandle then
-				fileHandle:write(remoteHandle.readAll())
-				fileHandle:close()
-			else
-				printWarning("Could not write file /etc/repolist")
-			end
-		end
-		remoteHandle.close()
-	else
-		printWarning("could not retrieve remote file.")
-	end
-	if fs.exists("/etc/repolist") then
-		if pack then
-			pack.makeDir("/etc/repositories")
-		elseif queue then
-			queue:makeDir("/etc/repositories")
-		else
-			if not fs.exists("/etc/repositories") then fs.makeDir("/etc/repositories") end
-		end
-
-		local handle = io.open("/etc/repolist", "r")
-		if handle then
-			for line in handle:lines() do
-				local file, url = string.match(line, "^(%S*)%s*(.*)")
-				if file and url then
-					io.write("Fetching Repository: "..file.."\n")
-					local remoteHandle = http.get(url)
-					if remoteHandle then
-						if pack then
-							pack.addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
-						elseif queue then
-							queue:addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
-						else
-							local fileHandle = io.open(fs.combine("/etc/repositories", file), "w")
-							if fileHandle then
-								fileHandle:write(remoteHandle.readAll())
-								fileHandle:close()
-							else
-								printWarning("Could not write file: "..fs.combine("/etc/repositories", file))
-							end
-						end
-						remoteHandle.close()
-					else
-						printWarning("Could not retrieve remote file: "..file)
-					end
-				end
-			end
-		else
-			printError("Failed to open repository list")
-		end
-	end
-
-	if queue then
-		queue:finish()
-	end
-
-	if #args > 0 then
-		while args[1] == "fetch" do
-			table.remove(args, 1)
-		end
-		if #args > 0 then
-			shell.run(shell.getRunningProgram(), unpack(args))
-		end
-		return
-	end
 end
-
---[[
-term.clear()
-term.setCursorPos(1,1)
-]]

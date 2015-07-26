@@ -1,5 +1,6 @@
 list = {}
 installed = {}
+installRoot = "/"
 
 local function postStatus(type, text)
 	os.queueEvent("package_status", type, text)
@@ -47,16 +48,17 @@ local currentPackage
 
 local Transaction = {
 	writeFile = function(self)
-		if fs.exists(self.path) then
-			local handle = io.open(self.path, "r")
+		local path = fs.combine(installRoot, self.path)
+		if fs.exists(path) then
+			local handle = io.open(path, "r")
 			if handle then
 				self.backup = handle:read("*a")
 				handle:close()
 			end
 		end
-		local handle = io.open(self.path, "w") 
+		local handle = io.open(path, "w")
 		if handle then
-			printInformation("Writing file "..self.path)
+			printInformation("Writing file "..path)
 			handle:write(self.contents)
 			handle:close()
 		else
@@ -65,40 +67,44 @@ local Transaction = {
 		return true
 	end,
 	deleteFile = function(self)
-		if fs.exists(self.path) then
-			local handle = io.open(self.path, "r")
+		local path = fs.combine(installRoot, self.path)
+		if fs.exists(path) then
+			local handle = io.open(path, "r")
 			if handle then
 				self.backup = handle:read("*a")
 				handle:close()
 			end
 		end
-		printInformation("Deleting file "..self.path)
-		fs.delete(self.path)
-		return not fs.exists(self.path)
+		printInformation("Deleting file "..path)
+		fs.delete(path)
+		return not fs.exists(path)
 	end,
 	makeDirectory = function(self)
-		if not fs.exists(self.path) then
-			printInformation("Creating directory "..self.path)
-			fs.makeDir(self.path)
+		local path = fs.combine(installRoot, self.path)
+		if not fs.exists(path) then
+			printInformation("Creating directory "..path)
+			fs.makeDir(path)
 		end
-		return fs.isDir(self.path)
+		return fs.isDir(path)
 	end,
 	removeDirectory = function(self)
-		if fs.exists(self.path) and fs.isDir(self.path) and #(fs.list(self.path)) == 0 then
-			printInformation("Removing directory "..self.path)
-			fs.delete(self.path)
+		local path = fs.combine(installRoot, self.path)
+		if fs.exists(path) and fs.isDir(path) and #(fs.list(path)) == 0 then
+			printInformation("Removing directory "..path)
+			fs.delete(path)
 		end
-		return not fs.exists(self.path)
+		return not fs.exists(path)
 	end,
 	updateInfo = function(self)
-		newLine = self.path..(self.version and ";"..self.version or "")
+		local path = fs.combine(installRoot, self.path)
+		newLine = path..(self.version and ";"..self.version or "")
 		local lineFound = false
 		for i = 1, #self.contents do
-			if self.path == string.match(self.contents[i], "^([^;]+)") then
+			if path == string.match(self.contents[i], "^([^;]+)") then
 				--found the right entry, modify correctly now.
 				lineFound = true
 				self.contents[i] = newLine
-				updateFileInfo(package.installed[self.pack.fullName].files, self.path, self.version)
+				updateFileInfo(package.installed[self.pack.fullName].files, path, self.version)
 				break
 			end
 		end
@@ -108,10 +114,11 @@ local Transaction = {
 		end
 	end,
 	removeInfo = function(self)
+		local path = fs.combine(installRoot, self.path)
 		for i = 1, #self.contents do
-			if self.path == string.match(self.contents[i], "^([^;]+)") then
+			if path == string.match(self.contents[i], "^([^;]+)") then
 				table.remove(self.contents, i)
-				local entry = findFileEntry(package.installed[self.pack.fullName].files, self.path)
+				local entry = findFileEntry(package.installed[self.pack.fullName].files, path)
 				if entry then
 					table.remove(package.installed[self.pack.fullName].files, entry)
 				end
@@ -205,7 +212,7 @@ local TransQueue = {
 		}
 	end
 	finish = function(self) (pack, transactions, removing)
-		local installedFile = fs.combine("/etc/.installed", self.pack.fullName)
+		local installedFile = fs.combine(fs.combine(installRoot, "/etc/.installed"), self.pack.fullName)
 		local installedData = {}
 		if installed[self.pack.fullName] and fs.exists(installedFile) then
 			local handle = io.open(installedFile, "r")
@@ -280,7 +287,7 @@ local TransQueue = {
 		else
 			--write out file again, if any content exists for it.
 			table.insert(installedData, 1, tostring(self.pack.version))
-			if not fs.exists(fs.combine("/etc/.installed", self.pack.repo)) then fs.makeDir(fs.combine("/etc/.installed", self.pack.repo)) end
+			if not fs.exists(fs.combine(fs.combine(installRoot, "/etc/.installed"), self.pack.repo)) then fs.makeDir(fs.combine(fs.combine(installRoot, "/etc/.installed"), self.pack.repo)) end
 			local handle = io.open(installedFile, "w")
 			if handle then
 				for k, v in ipairs(installedData) do
@@ -502,7 +509,7 @@ downloadFunctions.grin = function(pack, env, queue)
 	local fullName = pack.repo.."/"..pack.name
 	local status
 	parallel.waitForAny(function()
-		status = env.shell.run("pastebin run VuBNx3va -e -u", pack.download.author, "-r", pack.download.repository, fs.combine(pack.target, pack.name))
+		status = env.shell.run("pastebin run VuBNx3va -e -u", pack.download.author, "-r", pack.download.repository, fs.combine(fs.combine(installRoot, pack.target), pack.name))
 	end, function()
 		while true do
 			local e, msg = os.pullEvent("grin_install_status")
@@ -541,7 +548,7 @@ local Package = {
 		if self.setup then
 			local queue = newTransactionQueue(self.fullName)
 			--packman key included solely for backwards compatibility, usage is deprecated in favor of pack.
-			os.run({shell = env.shell, packman = queue:env(), pack = queue:env()}, fs.combine(self.target, self.setup))
+			os.run({shell = env.shell, packman = queue:env(), pack = queue:env()}, fs.combine(fs.combine(installRoot, self.target), self.setup))
 
 			--this must be done a second time to finalize any changes made by the install script.
 			return queue:finish()
@@ -554,13 +561,13 @@ local Package = {
 
 		if self.cleanup then
 			local queue = newTransactionQueue(self.fullName, true)
-			os.run({shell = env.shell, packman = queue:env(), pack = queue:env()}, fs.combine(self.target, self.cleanup))
+			os.run({shell = env.shell, packman = queue:env(), pack = queue:env()}, fs.combine(fs.combine(installRoot, self.target), self.cleanup))
 			if not queue:finish() then return false end
 		end
 
 		local fileList = package.installed[self.fullName].files
 		for i = #fileList, 1, -1 do
-			if fs.exists(fileList[i].path) and fs.isDir(fileList[i].path) then
+			if fs.exists(fs.combine(installRoot, fileList[i].path)) and fs.isDir(fs.combine(installRoot, fileList[i].path)) then
 				queue:removeDir(fileList[i].path)
 			else
 				queue:removeFile(fileList[i].path)
@@ -603,7 +610,7 @@ local Package = {
 
 			for i, fileInfo in ipairs(package.installed[self.fullName].files) do
 				if not updatedFiles[fileInfo.path] then
-					if not fs.isDir(fileInfo.path) or (fs.isDir(fileInfo.path) and #(fs.list(fileInfo.path)) == 0) then
+					if not fs.isDir(fs.combine(installRoot, fileInfo.path)) or (fs.isDir(fs.combine(installRoot, fileInfo.path)) and #(fs.list(fs.combine(installRoot, fileInfo.path))) == 0) then
 						queue:removeFile(fileInfo.path)
 					end
 				end
@@ -791,11 +798,11 @@ function load()
 		end
 	end
 
-	if fs.exists("/etc/.installed") and fs.isDir("/etc/.installed") then
-		for _, repo in ipairs(fs.list("/etc/.installed")) do
-			for _, file in ipairs(fs.list(fs.combine("/etc/.installed", repo))) do
+	if fs.exists(fs.combine(installRoot, "/etc/.installed")) and fs.isDir(fs.combine(installRoot, "/etc/.installed")) then
+		for _, repo in ipairs(fs.list(fs.combine(installRoot, "/etc/.installed"))) do
+			for _, file in ipairs(fs.list(fs.combine(fs.combine(installRoot, "/etc/.installed"), repo))) do
 				local name = repo.."/"..file
-				local handle = io.open(fs.combine(fs.combine("/etc/.installed", repo), file), "r")
+				local handle = io.open(fs.combine(fs.combine(fs.combine(installRoot, "/etc/.installed"), repo), file), "r")
 				if handle then
 					installed[name] = {files = {}}
 					local packVersion
