@@ -371,73 +371,120 @@ elseif mode == "search" then
 		end
 	end
 elseif mode == "fetch" then
+	local queue
+	if package and not pack then
+		queue = package.newTransactionQueue("main/packman")
+	end
 	print("Updating packman")
 	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
 	if remoteHandle then
-		local fileHandle = io.open(shell.getRunningProgram(), "w")
-		if fileHandle then
-			fileHandle:write(remoteHandle.readAll())
-			fileHandle:close()
+		if pack then
+			pack.addFile(shell.getRunningProgram(), remoteHandle.readAll())
+		elseif queue then
+			queue:addFile(shell.getRunningProgram(), remoteHandle.readAll())
 		else
-			printWarning("Could not open file "..shell.getRunningProgram())
+			local fileHandle = io.open(shell.getRunningProgram(), "w")
+			if fileHandle then
+				fileHandle:write(remoteHandle.readAll())
+				fileHandle:close()
+			else
+				printWarning("Could not write file "..shell.getRunningProgram())
+			end
 		end
+		remoteHandle.close()
 	else
 		printWarning("Could not retrieve remote file.")
 	end
 	print("Updating package API")
 	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/package")
 	if remoteHandle then
-		if not fs.exists("/usr/apis") then fs.makeDir("/usr/apis") end
-		local fileHandle = io.open("/usr/apis/package", "w")
-		if fileHandle then
-			fileHandle:write(remoteHandle.readAll())
-			fileHandle:close()
+		if pack then
+			pack.makeDir("/usr/apis")
+			pack.addFile("/usr/apis/package", remoteHandle.readAll())
+		elseif queue then
+			queue:makeDir("/usr/apis")
+			queue:addFile("/usr/apis/package", remoteHandle.readAll())
 		else
-			printWarning("Could not open file /usr/apis/package")
+			if not fs.exists("/usr/apis") then fs.makeDir("/usr/apis") end
+			local fileHandle = io.open("/usr/apis/package", "w")
+			if fileHandle then
+				fileHandle:write(remoteHandle.readAll())
+				fileHandle:close()
+			else
+				printWarning("Could not write file /usr/apis/package")
+			end
 		end
+		remoteHandle.close()
 	else
 		printWarning("Could not retrieve remote file.")
 	end
 	print("Fetching Repository List")
 	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
 	if remoteHandle then
-		if not fs.exists("/etc") then fs.makeDir("/etc") end
-		local fileHandle = io.open("/etc/repolist", "w")
-		if fileHandle then
-			fileHandle:write(remoteHandle.readAll())
-			fileHandle:close()
+		if pack then
+			pack.makeDir("/etc")
+			pack.addFile("/etc/repolist", remoteHandle.readAll())
+		elseif queue then
+			queue:makeDir("/etc")
+			queue:addFile("/etc/repolist", remoteHandle.readAll())
+		else
+			local fileHandle = io.open("/etc/repolist", "w")
+			if fileHandle then
+				fileHandle:write(remoteHandle.readAll())
+				fileHandle:close()
+			else
+				printWarning("Could not write file /etc/repolist")
+			end
+		end
+		remoteHandle.close()
+	else
+		printWarning("could not retrieve remote file.")
+	end
+	if fs.exists("/etc/repolist") then
+		if pack then
+			pack.makeDir("/etc/repositories")
+		elseif queue then
+			queue:makeDir("/etc/repositories")
+		else
 			if not fs.exists("/etc/repositories") then fs.makeDir("/etc/repositories") end
-			local handle = io.open("/etc/repolist", "r")
-			if handle then
-				for line in handle:lines() do
-					local file, url = string.match(line, "^(%S*)%s*(.*)")
-					if file and url then
-						print("Fetching Repository: "..file)
-						local remoteHandle = http.get(url)
-						if remoteHandle then
+		end
+
+		local handle = io.open("/etc/repolist", "r")
+		if handle then
+			for line in handle:lines() do
+				local file, url = string.match(line, "^(%S*)%s*(.*)")
+				if file and url then
+					print("Fetching Repository: "..file)
+					local remoteHandle = http.get(url)
+					if remoteHandle then
+						if pack then
+							pack.addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
+						elseif queue then
+							queue:addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
+						else
 							local fileHandle = io.open(fs.combine("/etc/repositories", file), "w")
 							if fileHandle then
-								fileHandle:write(remoteHandle:readAll())
+								fileHandle:write(remoteHandle.readAll())
 								fileHandle:close()
 							else
 								printWarning("Could not write file: "..fs.combine("/etc/repositories", file))
 							end
-							remoteHandle.close()
-						else
-							printWarning("Could not retrieve remote file: "..file)
 						end
+						remoteHandle.close()
+					else
+						printWarning("Could not retrieve remote file: "..file)
 					end
 				end
-			else
-				printError("Failed to open repository list")
 			end
 		else
-			printError("Could not write file: /etc/repolist")
+			printError("Failed to open repository list")
 		end
-		remoteHandle.close()
-	else
-		printError("Could not retrieve remote file: repolist")
 	end
+
+	if queue then
+		queue:finish()
+	end
+
 	if #args > 0 then
 		while args[1] == "fetch" do
 			table.remove(args, 1)
