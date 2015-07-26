@@ -197,6 +197,140 @@ local packAPI = {
 	end,
 }
 
+local TransQueue = {
+	addFile = function(self, path, contents, version)
+		table.insert(self.transactions, newTransaction(self.pack, path, "writeFile", contents, version))
+	end,
+	removeFile = function(self, path)
+		table.insert(self.transactions, newTransaction(self.pack, path, "removeFile"))
+	end,
+	makeDir = function(self, path)
+		table.insert(self.transactions, newTransaction(self.pack, path, "makeDirectory"))
+	end,
+	removeDir = function(self, path)
+		table.insert(self.transactions, newTransaction(self.pack, path, "removeDirectory"))
+	end,
+	env = function(self)
+		return {
+			addFile = function(path, contents, version)
+				table.insert(self.transactions, newTransaction(self.pack, path, "writeFile", contents, version))
+			end,
+			removeFile = function(path)
+				table.insert(self.transactions, newTransaction(self.pack, path, "removeFile"))
+			end,
+			makeDir = function(path)
+				table.insert(self.transactions, newTransaction(self.pack, path, "makeDirectory"))
+			end,
+			removeDir = function(path)
+				table.insert(self.transactions, newTransaction(self.pack, path, "removeDirectory"))
+			end,
+		}
+	end
+	finish = function(self) (pack, transactions, removing)
+		local installedFile = fs.combine("/etc/.installed", self.pack.fullName)
+		local installedData = {}
+		if installed[self.pack.fullName] and fs.exists(installedFile) then
+			local handle = io.open(installedFile, "r")
+			if handle then
+				for line in handle:lines() do
+					table.insert(installedData, line)
+				end
+				handle:close()
+
+				--strip version number if present
+				if #installedData >= 1 then
+					table.remove(installedData, 1)
+				end
+			end
+		end
+
+		--ensure installed table entry exists
+		if not package.installed[self.pack.fullName] then
+			package.installed[self.pack.fullName] = {
+				version = self.pack.version,
+				files = {},
+			}
+			if not package.installed[self.pack.name] then package.installed[self.pack.name] = {[self.pack.repo] = package.installed[self.pack.fullName]} end
+		end
+
+		local fileInfoUpdates = {}
+
+		local lastTransaction = false
+
+		for i = 1, #self.transactions do
+			if not self.transactions[i]:finish() then
+				--clean up already-processed transactions and exit
+				printWarning("Transaction failed! Rolling back...")
+				for j = i, 1, -1 do
+					self.transactions[i]:rollback()
+					return false
+				end
+			end
+			--construct new line (or nil to remove entry, if present)
+			local newLine
+			if self.transactions[i].type == "writeFile" then
+				table.insert(fileInfoUpdates, newTransaction(pack, self.transactions[i].path, "updateInfo", installedData, self.transactions[i].version))
+			elseif self.transactions[i].type == "makeDirectory" then
+				table.insert(fileInfoUpdates, newTransaction(pack, self.transactions[i].path, "updateInfo", installedData))
+			elseif self.transactions[i].type == "deleteFile" or self.transactions[i].type == "removeDirectory" then
+				table.insert(fileInfoUpdates, newTransaction(pack, self.transactions[i].path, "removeInfo", installedData))
+			end
+		end
+
+		--modify installed data to match the transactions succesfully executed.
+		printInformation("Updating Database")
+		for i = 1, #fileInfoUpdates do
+			fileInfoUpdates[i]:finish()
+		end
+
+		if self.removing and #installedData == 0 then
+			fs.delete(installedFile)
+
+			--remove entries from installed packages table if removing package.
+			package.installed[self.pack.name][self.pack.repo] = nil
+			local othersWithName = false
+			for k, v in pairs(package.installed[self.pack.name]) do
+				if v then
+					othersWithName = true
+					break
+				end
+			end
+			if not othersWithName then
+				package.installed[self.pack.name] = nil
+			end
+			package.installed[self.pack.fullName] = nil
+		else
+			--write out file again, if any content exists for it.
+			table.insert(installedData, 1, tostring(self.pack.version))
+			if not fs.exists(fs.combine("/etc/.installed", self.pack.repo)) then fs.makeDir(fs.combine("/etc/.installed", self.pack.repo)) end
+			local handle = io.open(installedFile, "w")
+			if handle then
+				for k, v in ipairs(installedData) do
+					handle:write(v.."\n")
+				end
+				handle:close()
+			end
+		end
+		return true
+	end,
+}
+
+local queueMeta = {__index = TransQueue}
+
+function newTransactionQueue(packName, removing)
+	local pack
+	if package.list[packName] and package.list[packName].version then pack = package.list[packName] else return nil, "No such package!" end
+	local queue = {
+		pack = pack,
+		removing = removing,
+		transactions = {},
+	}
+
+	setmetatable(queue, queueMeta)
+
+	return queue
+end
+
 local downloadTypes = {
 	github = {
 		author = true,
