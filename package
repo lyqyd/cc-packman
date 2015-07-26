@@ -529,8 +529,7 @@ local function findInstalledVersionByPath(packName, path)
 	end
 end
 
-local scriptEnv = {packman = packAPI}
-setmetatable(scriptEnv, {__index = _G})
+local new_fs = {}
 
 local Package = {
 	install = function(self, env)
@@ -548,7 +547,7 @@ local Package = {
 		if self.setup then
 			local queue = newTransactionQueue(self.fullName)
 			--packman key included solely for backwards compatibility, usage is deprecated in favor of pack.
-			os.run({shell = env.shell, packman = queue:env(), pack = queue:env()}, fs.combine(fs.combine(installRoot, self.target), self.setup))
+			os.run({shell = env.shell, packman = queue:env(), pack = queue:env(), fs = new_fs}, fs.combine(fs.combine(installRoot, self.target), self.setup))
 
 			--this must be done a second time to finalize any changes made by the install script.
 			return queue:finish()
@@ -561,7 +560,7 @@ local Package = {
 
 		if self.cleanup then
 			local queue = newTransactionQueue(self.fullName, true)
-			os.run({shell = env.shell, packman = queue:env(), pack = queue:env()}, fs.combine(fs.combine(installRoot, self.target), self.cleanup))
+			os.run({shell = env.shell, packman = queue:env(), pack = queue:env(), fs = new_fs}, fs.combine(fs.combine(installRoot, self.target), self.cleanup))
 			if not queue:finish() then return false end
 		end
 
@@ -830,5 +829,27 @@ function load()
 				end
 			end
 		end
+	end
+
+	do
+		--override fs api to use installRoot, recreated when loading to accomodate installRoot changes.
+		local function fsWrap(name,f,n)
+			return function(...)
+				local args = { ... }
+				for k,v in ipairs(args) do
+					if n == nil or k <= n then
+						args[k] = fs.combine(installRoot, v)
+					end
+				end
+				return f(unpack(args))
+			end
+		end
+		for k,v in pairs(fs) do
+			new_fs[k] = fsWrap(k,v,nil)
+		end
+		new_fs.open = fsWrap("open",fs.open,1)
+		new_fs.combine = fs.combine
+		new_fs.getName = fs.getName
+		new_fs.getDir = fs.getDir
 	end
 end
