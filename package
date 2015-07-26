@@ -186,16 +186,16 @@ local TransQueue = {
 	env = function(self)
 		return {
 			addFile = function(path, contents, version)
-				table.insert(self.transactions, newTransaction(self.pack, path, "writeFile", contents, version))
+				self:addFile(path, contents, version)
 			end,
 			removeFile = function(path)
-				table.insert(self.transactions, newTransaction(self.pack, path, "removeFile"))
+				self:removeFile(path)
 			end,
 			makeDir = function(path)
-				table.insert(self.transactions, newTransaction(self.pack, path, "makeDirectory"))
+				self:makeDir(path)
 			end,
 			removeDir = function(path)
-				table.insert(self.transactions, newTransaction(self.pack, path, "removeDirectory"))
+				self:removeDir(path)
 			end,
 		}
 	end
