@@ -851,9 +851,9 @@ function load()
 		local function fsWrap(name,f,n)
 			return function(...)
 				local args = { ... }
-				for k,v in ipairs(fs) do
+				for k,v in ipairs(args) do
 					if n == nil or k <= n then
-						new_fs[k] = fs.combine(root, v)
+						args[k] = fs.combine(root, v)
 					end
 				end
 				return f(unpack(args))
