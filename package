@@ -547,7 +547,12 @@ local Package = {
 		if self.setup then
 			local queue = newTransactionQueue(self.fullName)
 			--packman key included solely for backwards compatibility, usage is deprecated in favor of pack.
-			os.run({shell = env.shell, packman = queue:env(), pack = queue:env(), fs = new_fs}, fs.combine(fs.combine(installRoot, self.target), self.setup))
+			local setupArgs = {}
+			for match in string.gmatch(self.setup, "(%S+)") do
+				table.insert(setupArgs, match)
+			end
+			setupArgs[1] = fs.combine(fs.combine(installRoot, self.target), setupArgs[1])
+			os.run({shell = env.shell, packman = queue:env(), pack = queue:env(), fs = new_fs}, unpack(setupArgs))
 
 			--this must be done a second time to finalize any changes made by the install script.
 			return queue:finish()
@@ -560,7 +565,12 @@ local Package = {
 
 		if self.cleanup then
 			local queue = newTransactionQueue(self.fullName, true)
-			os.run({shell = env.shell, packman = queue:env(), pack = queue:env(), fs = new_fs}, fs.combine(fs.combine(installRoot, self.target), self.cleanup))
+			local cleanupArgs = {}
+			for match in string.gmatch(self.cleanup, "(%S+)") do
+				table.insert(cleanupArgs, match)
+			end
+			cleanupArgs[1] = fs.combine(fs.combine(installRoot, self.target), cleanupArgs[1])
+			os.run({shell = env.shell, packman = queue:env(), pack = queue:env(), fs = new_fs}, unpack(cleanupArgs))
 			if not queue:finish() then return false end
 		end
 
