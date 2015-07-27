@@ -116,9 +116,7 @@ local function loadPackageAPI()
 	end
 end
 
-if #mode > 0 then
-	loadPackageAPI()
-end
+loadPackageAPI()
 
 local categoryList = {}
 local categorySorted = {}
