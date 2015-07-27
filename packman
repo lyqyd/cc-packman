@@ -345,9 +345,11 @@ if fetch then
 		queue:finish()
 	end
 
-	--reload package API.
-	os.unloadAPI("package")
-	loadPackageAPI()
+	if #mode > 0 then
+		--reload package API.
+		os.unloadAPI("package")
+		loadPackageAPI()
+	end
 end
 
 if mode == "install" then
