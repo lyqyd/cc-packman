@@ -182,13 +182,13 @@ local TransQueue = {
 		table.insert(self.transactions, newTransaction(self.pack, path, "writeFile", contents, version))
 	end,
 	removeFile = function(self, path)
-		table.insert(self.transactions, newTransaction(self.pack, path, "removeFile"))
+		table.insert(self.transactions, newTransaction(self.pack, path, "deleteFile"))
 	end,
 	makeDir = function(self, path)
-		if string.match(path, "(.-)/[^/]+$") and not fs.exists(string.match(path, "(.-)/[^/]+$")) then
+		if string.match(path, "(.-)/[^/]+$") and not fs.exists(fs.combine(installRoot, string.match(path, "(.-)/[^/]+$"))) then
 			self:makeDir(string.match(path, "(.-)/[^/]+$"))
-			table.insert(self.transactions, newTransaction(self.pack, path, "makeDirectory"))
-		else
+		end
+		if not fs.exists(fs.combine(installRoot, path)) then
 			table.insert(self.transactions, newTransaction(self.pack, path, "makeDirectory"))
 		end
 	end,
@@ -210,8 +210,8 @@ local TransQueue = {
 				self:removeDir(path)
 			end,
 		}
-	end
-	finish = function(self) (pack, transactions, removing)
+	end,
+	finish = function(self)
 		local installedFile = fs.combine(fs.combine(installRoot, "/etc/.installed"), self.pack.fullName)
 		local installedData = {}
 		if installed[self.pack.fullName] and fs.exists(installedFile) then
@@ -254,11 +254,11 @@ local TransQueue = {
 			--construct new line (or nil to remove entry, if present)
 			local newLine
 			if self.transactions[i].type == "writeFile" then
-				table.insert(fileInfoUpdates, newTransaction(pack, self.transactions[i].path, "updateInfo", installedData, self.transactions[i].version))
+				table.insert(fileInfoUpdates, newTransaction(self.pack, self.transactions[i].path, "updateInfo", installedData, self.transactions[i].version))
 			elseif self.transactions[i].type == "makeDirectory" then
-				table.insert(fileInfoUpdates, newTransaction(pack, self.transactions[i].path, "updateInfo", installedData))
+				table.insert(fileInfoUpdates, newTransaction(self.pack, self.transactions[i].path, "updateInfo", installedData))
 			elseif self.transactions[i].type == "deleteFile" or self.transactions[i].type == "removeDirectory" then
-				table.insert(fileInfoUpdates, newTransaction(pack, self.transactions[i].path, "removeInfo", installedData))
+				table.insert(fileInfoUpdates, newTransaction(self.pack, self.transactions[i].path, "removeInfo", installedData))
 			end
 		end
 
@@ -608,7 +608,7 @@ local Package = {
 			end
 
 			for i, fileInfo in ipairs(package.installed[self.fullName].files) do
-				if not updatedFiles[fileInfo.path] then
+				if not updatedFiles[fileInfo.path] and fileInfo.version ~= package.installed[self.fullName].version then
 					if not fs.isDir(fs.combine(installRoot, fileInfo.path)) or (fs.isDir(fs.combine(installRoot, fileInfo.path)) and #(fs.list(fs.combine(installRoot, fileInfo.path))) == 0) then
 						queue:removeFile(fileInfo.path)
 					end
