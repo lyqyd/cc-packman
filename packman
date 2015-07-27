@@ -81,7 +81,7 @@ end
 local printError, printWarning, printInformation
 
 local function loadPackageAPI()
-	if not package then if shell.resolveProgram("package") then os.loadAPI(shell.resolveProgram("package")) elseif fs.exists("usr/apis/package") then os.loadAPI("usr/apis/package") else error("Could not load package API!") end end
+	if not package then if shell.resolveProgram("package") then os.loadAPI(shell.resolveProgram("package")) elseif fs.exists("usr/apis/package") then os.loadAPI("usr/apis/package") elseif not fetch then error("Could not load package API!") end end
 
 	if package then
 		function printError(errorText)
@@ -110,125 +110,16 @@ local function loadPackageAPI()
 		package.printInformation = printInformation
 
 		resetScreen()
-		printInformation("Reading installed database...")
+		io.write("Loading database...\n")
 		package.installRoot = target
 		package.load()
 	end
 end
 
-if #mode > 0 then
-	loadPackageAPI()
-end
+loadPackageAPI()
 
 local categoryList = {}
 local categorySorted = {}
-
-if #mode > 0 then
-	for n, v in pairs(package.list) do
-		if v.category then
-			for category in pairs(v.category) do
-				if not categoryList[category] then
-					categoryList[category] = {[n] = true}
-					table.insert(categorySorted, category)
-				else
-					categoryList[category][n] = true
-				end
-			end
-		end
-	end
-	table.sort(categorySorted)
-
-	--flesh out dependencies
-	for pName, pData in pairs(package.list) do
-		if pData.dependencies then
-			pData.dependencies, errmsg = package.findDependencies(pName, {})
-			if not pData.dependencies then
-				--if dependencies could not be resolved, remove the package.
-				printWarning("Could not resolve dependency on "..errmsg.." in package "..pName)
-				package.list[pName] = nil
-			end
-		end
-	end
-end
-
-local function lookupPackage(name, installedOnly)
-	if package.list[name] and not package.list[name].dependencies then
-		local options = {}
-		if installedOnly and package.installed[name] then
-			for name, pack in pairs(package.installed[name]) do
-				table.insert(options, name)
-			end
-		elseif installedOnly then
-			--using installedOnly, but no packages of that name are installed.
-			return false
-		else
-			for name, pack in pairs(package.list[name]) do
-				table.insert(options, name)
-			end
-		end
-		if #options > 1 then
-			io.write("Package "..name.." is ambiguous.\n")
-			for i = 1, #options do
-				write(tostring(i)..": "..options[i].."  ")
-			end
-			io.write("\n")
-			io.write("Select option: \n")
-			local selection = io.read()
-			if tonumber(selection) and options[tonumber(selection)] then
-				return options[tonumber(selection)].."/"..name
-			end
-		elseif #options == 1 then
-			return options[1].."/"..name
-		else
-			return false
-		end
-	elseif package.list[name] then
-		--since it must have a dependencies table, the name is already fully unique.
-		return name
-	else
-		return false
-	end
-end
-
-local function raw_package_operation(name, funcName)
-	local pack = package.list[name]
-	if not pack then return nil, "No such package" end
-	local co = coroutine.create(function() return pack[funcName](pack, getfenv()) end)
-	local event, filter, passback = {}
-	while true do
-		if (filter and (filter == event[1] or event[1] == "terminate")) or not filter then
-			passback = {coroutine.resume(co, unpack(event))}
-		end
-		if passback[1] == false then printWarning(passback[2]) end
-		if coroutine.status(co) == "dead" then return unpack(passback, 2) end
-		filter = nil
-		if passback and passback[1] and passback[2] then
-			filter = passback[2]
-		end
-		event = {os.pullEventRaw()}
-		if event[1] == "package_status" then
-			if event[2] == "info" then
-				printInformation(event[3])
-			elseif event[2] == "warning" then
-				printWarning(event[3])
-			elseif event[2] == "error" then
-				printError(event[3])
-			end
-		end
-	end
-end
-
-local function install(name)
-	return raw_package_operation(name, "install")
-end
-
-local function remove(name)
-	return raw_package_operation(name, "remove")
-end
-
-local function upgrade(name)
-	return raw_package_operation(name, "upgrade")
-end
 
 if fetch then
 	local queue
@@ -345,11 +236,120 @@ if fetch then
 		queue:finish()
 	end
 
+	fetch = false
+
 	if #mode > 0 then
 		--reload package API.
 		os.unloadAPI("package")
 		loadPackageAPI()
 	end
+end
+
+if #mode > 0 then
+	for n, v in pairs(package.list) do
+		if v.category then
+			for category in pairs(v.category) do
+				if not categoryList[category] then
+					categoryList[category] = {[n] = true}
+					table.insert(categorySorted, category)
+				else
+					categoryList[category][n] = true
+				end
+			end
+		end
+	end
+	table.sort(categorySorted)
+
+	--flesh out dependencies
+	for pName, pData in pairs(package.list) do
+		if pData.dependencies then
+			pData.dependencies, errmsg = package.findDependencies(pName, {})
+			if not pData.dependencies then
+				--if dependencies could not be resolved, remove the package.
+				printWarning("Could not resolve dependency on "..errmsg.." in package "..pName)
+				package.list[pName] = nil
+			end
+		end
+	end
+end
+
+local function lookupPackage(name, installedOnly)
+	if package.list[name] and not package.list[name].dependencies then
+		local options = {}
+		if installedOnly and package.installed[name] then
+			for name, pack in pairs(package.installed[name]) do
+				table.insert(options, name)
+			end
+		elseif installedOnly then
+			--using installedOnly, but no packages of that name are installed.
+			return false
+		else
+			for name, pack in pairs(package.list[name]) do
+				table.insert(options, name)
+			end
+		end
+		if #options > 1 then
+			io.write("Package "..name.." is ambiguous.\n")
+			for i = 1, #options do
+				write(tostring(i)..": "..options[i].."  ")
+			end
+			io.write("\n")
+			io.write("Select option: \n")
+			local selection = io.read()
+			if tonumber(selection) and options[tonumber(selection)] then
+				return options[tonumber(selection)].."/"..name
+			end
+		elseif #options == 1 then
+			return options[1].."/"..name
+		else
+			return false
+		end
+	elseif package.list[name] then
+		--since it must have a dependencies table, the name is already fully unique.
+		return name
+	else
+		return false
+	end
+end
+
+local function raw_package_operation(name, funcName)
+	local pack = package.list[name]
+	if not pack then return nil, "No such package" end
+	local co = coroutine.create(function() return pack[funcName](pack, getfenv()) end)
+	local event, filter, passback = {}
+	while true do
+		if (filter and (filter == event[1] or event[1] == "terminate")) or not filter then
+			passback = {coroutine.resume(co, unpack(event))}
+		end
+		if passback[1] == false then printWarning(passback[2]) end
+		if coroutine.status(co) == "dead" then return unpack(passback, 2) end
+		filter = nil
+		if passback and passback[1] and passback[2] then
+			filter = passback[2]
+		end
+		event = {os.pullEventRaw()}
+		if event[1] == "package_status" then
+			if event[2] == "info" then
+				printInformation(event[3])
+			elseif event[2] == "warning" then
+				printWarning(event[3])
+			elseif event[2] == "error" then
+				printError(event[3])
+			end
+		end
+	end
+end
+
+local function install(name)
+	return raw_package_operation(name, "install")
+end
+
+local function remove(name)
+	return raw_package_operation(name, "remove")
+end
+
+local function upgrade(name)
+	return raw_package_operation(name, "upgrade")
 end
 
 if mode == "install" then
