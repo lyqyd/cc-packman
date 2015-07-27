@@ -845,6 +845,9 @@ function load()
 		end
 	end
 
+	for k, v in pairs(new_fs) do
+		new_fs[k] = nil
+	end
 	do
 		local root = package.installRoot
 		--override fs api to use installRoot, recreated when loading to accomodate installRoot changes.
