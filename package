@@ -597,7 +597,7 @@ local Package = {
 						queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 					end
 					if self.download.type == "github" then
-						local content = raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/"..pack.download.branch.."/"..file.path)
+						local content = raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/"..self.download.branch.."/"..file.path)
 						if content then
 							queue:addFile(path, content, file.version)
 						else
