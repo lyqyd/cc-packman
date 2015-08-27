@@ -6,10 +6,10 @@ name = LyqydOS
 	category = os
 	setup = installer setup
 	cleanup = installer remove
-	dependencies = lyqyd/framebuffer lyqyd/configuration
+	dependencies = lyqyd/framebuffer lyqyd/configuration lyqyd/lsh
 	target = /LyqydOS
-	version = 1.8
-	size = 147403
+	version = 1.9
+	size = 133504
 end
 
 name = LyqydNet
@@ -22,6 +22,17 @@ name = LyqydNet
 	target = /usr
 	version = 1.5
 	size = 46169
+end
+
+name = lsh
+	type = github
+		author = lyqyd
+		repository = cc-lsh
+		branch = master
+	category = shell
+	dependencies = none
+	version = 0.1
+	size = 19606
 end
 
 name = location
