@@ -389,15 +389,13 @@ if mode == "install" then
 			for packageName in pairs(installList) do
 				if not install(packageName) then
 					printWarning("Could not "..mode.." package "..packageName)
-				--elseif package.list[packageName].setup then
-					--successfully installed, see if it has a setup script to run
-					--shell.run(fs.combine(package.list[packageName].target, package.list[packageName].setup))
 				end
 			end
 		end
 	end
 elseif mode == "update" then
 	local updateList = {}
+	local installList = {}
 	if #operation.arguments >= 1 then
 		for _, name in ipairs(operation.arguments) do
 			local result = lookupPackage(name, true)
@@ -410,8 +408,17 @@ elseif mode == "update" then
 			if v.files then
 				--filters out the disambiguation entries.
 				table.insert(updateList, k)
+				for name, info in pairs(package.list[k].dependencies) do
+					if not package.installed[name] then
+						installList[name] = true
+					end
+				end
 			end
 		end
+	end
+	local installString = ""
+	for k, v in pairs(installList) do
+		installString = installString..k.." "
 	end
 	if not forced then
 		for i = #updateList, 1, -1 do
@@ -420,13 +427,16 @@ elseif mode == "update" then
 			end
 		end
 	end
-	if #updateList > 0 then
+	if #updateList > 0 or #installString > 0 then
 		local updateString = ""
 		for i = 1, #updateList do
 			updateString = updateString..updateList[i].." "
 		end
 		if not forced then
 			io.write("The following packages will be updated: "..updateString.."\n")
+			if #installString > 0 then
+				io.write("The following packages will also be installed: "..installString.."\n")
+			end
 			io.write("Continue? (Y/n)\n")
 			local input = io.read()
 			if string.sub(input:lower(), 1, 1) == "n" then
@@ -434,6 +444,11 @@ elseif mode == "update" then
 			end
 		end
 		local failureCount = 0
+		for packageName in pairs(installList) do
+			if not install(packageName) then
+				printWarning("Could not install package "..packageName)
+			end
+		end
 		for _, packageName in pairs(updateList) do
 			if not upgrade(packageName) then
 				printWarning("Package "..packageName.." failed to update.")
