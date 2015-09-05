@@ -115,8 +115,8 @@ name = framebuffer
 	category = redirect buffer api
 	dependencies = none
 	target = /usr/apis
-	version = 0.4
-	size = 8844
+	version = 0.5
+	size = 8936
 end
 
 name = configuration
