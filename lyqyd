@@ -8,8 +8,8 @@ name = LyqydOS
 	cleanup = installer remove
 	dependencies = lyqyd/framebuffer lyqyd/configuration lyqyd/lsh
 	target = /LyqydOS
-	version = 1.901
-	size = 135291
+	version = 1.902
+	size = 136323
 end
 
 name = LyqydNet
@@ -159,8 +159,8 @@ name = lnfs-daemon
 	category = rednet server
 	dependencies = lyqyd/lyqydnet lyqyd/configuration
 	target = /usr/bin
-	version = 0.1
-	size = 6371
+	version = 0.2
+	size = 6611
 end
 
 name = lnfs-client
@@ -171,8 +171,8 @@ name = lnfs-client
 	category = rednet fs
 	dependencies = lyqyd/lyqydos lyqyd/lyqydnet
 	target = /usr/bin
-	version = 0.1
-	size = 3952
+	version = 0.2
+	size = 3662
 end
 
 name = raidtools
@@ -183,8 +183,8 @@ name = raidtools
 	category = fs
 	dependencies = lyqyd/lyqydos
 	target = /usr/bin
-	version = 0.2
-	size = 14075
+	version = 0.3
+	size = 13333
 end
 
 name = lyqyd-suite
