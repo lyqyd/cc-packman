@@ -8,8 +8,8 @@ name = LyqydOS
 	cleanup = installer remove
 	dependencies = lyqyd/framebuffer lyqyd/configuration lyqyd/lsh
 	target = /LyqydOS
-	version = 1.902
-	size = 136323
+	version = 1.903
+	size = 134865
 end
 
 name = LyqydNet
@@ -183,8 +183,8 @@ name = raidtools
 	category = fs
 	dependencies = lyqyd/lyqydos
 	target = /usr/bin
-	version = 0.3
-	size = 13333
+	version = 0.4
+	size = 13614
 end
 
 name = lyqyd-suite
