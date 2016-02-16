@@ -54,6 +54,7 @@ name = LyqydOS
 	type = github
 		author = lyqyd
 		repository = LyqydOS
+		branch = master
 	category = os
 	setup = installer setup
 	cleanup = installer remove
