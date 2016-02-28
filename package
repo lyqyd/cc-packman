@@ -1,6 +1,7 @@
 list = {}
 installed = {}
 installRoot = "/"
+local unpack = unpack or table.unpack
 
 local function postStatus(type, text)
 	os.queueEvent("package_status", type, text)
