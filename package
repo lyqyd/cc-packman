@@ -320,6 +320,7 @@ local downloadTypes = {
 		author = true,
 		repository = true,
 		branch = true,
+		path = false,
 	},
 	bitbucket = {
 		author = true,
@@ -385,7 +386,7 @@ lookupFunctions.github = function(package)
 		end
 		return contentsTable
 	end
-	return addDirectoryContents("", {})
+	return addDirectoryContents(package.download.path or "", {})
 end
 
 lookupFunctions.bitbucket = function(package)
@@ -690,18 +691,39 @@ local function addPacks(file)
 		for line in listHandle:lines() do
 			if state == "type" then
 				local allAttributes = true
-				for attribute in pairs(downloadTypes[entryTable.download.type]) do
+				local optional = false
+				for attribute, required in pairs(downloadTypes[entryTable.download.type]) do
 					if not entryTable.download[attribute] then
-						allAttributes = false
-						break
+						if required then
+							allAttributes = false
+							break
+						else
+							optional = true
+						end
 					end
 				end
 				if allAttributes then
-					state = "main"
+					if optional then
+						state = "type-optional"
+					else
+						state = "main"
+					end
 				end
 			end
 			local property,hasValue,value = string.match(line, "^%s*([^=%s]+)%s*(=?)%s*(.-)%s*$")
 			hasValue=hasValue~="" or nil
+			if state == "type-optional" then
+				local propertyFound = false
+				for prop in pairs(downloadTypes[entryTable.download.type]) do
+					if property == prop then
+						propertyFound = true
+						break
+					end
+				end
+				if not propertyFound then
+					state = "main"
+				end
+			end
 			if property == "name" and state == "" then
 				if state == "" then
 					entryTable = new(string.lower(value), packName)
@@ -777,7 +799,7 @@ local function addPacks(file)
 					end
 					state = ""
 				end
-			elseif state == "type" then
+			elseif state == "type" or state == "type-optional" then
 				local propertyFound = false
 				for prop in pairs(downloadTypes[entryTable.download.type]) do
 					if property == prop then
