@@ -52,3 +52,14 @@ name = treefarm
 	version = 0.1
 	size = 3510
 end
+
+name = storage-top
+	type = raw
+		url = https://raw.githubusercontent.com/lyqyd/cc-generalized-setup/master/projects/storage-top
+		filename = storage-top
+	category = turtle
+	dependencies = lyqyd/setup
+	target = /etc/projects
+	version = 0.1
+	size = 12135
+end
