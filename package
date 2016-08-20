@@ -667,6 +667,7 @@ function findDependencies(packageName, _dependencyTable)
 	if package.list[packageName] then
 		dependencyTable[packageName] = true
 		for packName in pairs(package.list[packageName].dependencies) do
+			packName = packName:lower()
 			if packName ~= "none" and not dependencyTable[packName] then
 				dependencyTable, errmsg = package.findDependencies(packName, dependencyTable)
 				if not dependencyTable then return nil, errmsg end
