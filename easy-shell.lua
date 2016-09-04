@@ -1,0 +1,76 @@
+local args = {...}
+
+local exStr = [[shell.run("/usr/bin/easy-shell execute")]]
+
+local function loadStartup()
+	local lines = {}
+	if fs.exists("/startup") then
+		local handle = io.open("/startup", "r")
+		if handle then
+			for line in handle:lines() do
+				table.insert(lines, line)
+			end
+			handle:close()
+		end
+	end
+	return lines
+end
+
+local function writeStartup(contents)
+	local handle = io.open("/startup", "w")
+	if handle then
+		for i, line in ipairs(contents) do
+			handle:write(line.."\n")
+		end
+		handle:close()
+	end
+end
+
+if #args >= 1 then
+	if args[1] == "execute" then
+		shell.setPath(shell.path()..":/usr/bin")
+
+		local loadAPI = os.loadAPI
+
+		os.loadAPI = function(path)
+			if fs.exists(path) then
+				return loadAPI(path)
+			elseif fs.exists(fs.combine("/usr/apis", path)) then
+				return loadAPI(fs.combine("/usr/apis", path))
+			end
+		end
+	elseif args[1] == "install" then
+		local contents = loadStartup()
+		local changed = false
+		if fs.exists("/startup") then			
+			local exists = false
+			
+			for i = 1, #contents do
+				if contents[i] == exStr then
+					exists = true
+					break
+				end
+			end
+			
+			if not exists then
+				table.insert(contents, 1, exStr)
+				changed = true
+			end
+		else
+			contents[1] = exStr
+			changed = true
+		end
+		if changed then
+			writeStartup(contents)
+		end
+		shell.run("usr/bin/easy-shell execute")
+	elseif args[1] == "remove" then
+		local contents = loadStartup()
+		for i = #contents, 1, -1 do
+			 if contents[i] == exStr then
+				table.remove(contents, i)
+			end
+		end
+		writeStartup(contents)
+	end
+end
