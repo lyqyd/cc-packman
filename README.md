@@ -46,6 +46,7 @@ Optional fields that may also be present but are not required include:
 * Setup Script
 * Cleanup Script
 * Target Folder
+* Manpage
 
 Here is an example package listing that displays all of these fields:
 
@@ -61,6 +62,7 @@ name = LyqydOS
 	dependencies = lyqyd/framebuffer lyqyd/configuration
 	target = /LyqydOS
 	version = 1.8
+	man = https://raw.githubusercontent.com/Wilma456/Computercraft/master/Owncloud/Cloud/manual.txt
 	size = 147403
 end
 ```

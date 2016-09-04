@@ -535,6 +535,15 @@ local Package = {
 		local queue
 		if downloadFunctions[self.download.type] then
 			queue = newTransactionQueue(self.fullName)
+   if string.len(self.man) > 0 then
+   --Download Manpage
+     local manpage = http.get(self.man)
+     local manfile = fs.open("/usr/man/"..self.name,"w")
+     local mancon = manpage.readAll()
+     manfile.write(mancon)
+     manfile.close()
+     manpage.close()
+   end
 			if not downloadFunctions[self.download.type](self, env, queue) then return false end
 		else
 			return false
@@ -565,7 +574,12 @@ local Package = {
 	remove = function(self, env)
 		if not package.installed[self.fullName] then return false end
 		local queue = newTransactionQueue(self.fullName, true)
-
+  
+  --Remove Manpage
+  if fs.exists("/usr/man/"..self.name) == true then
+    fs.delete("/usr/man/"..self.name)
+  end
+  
 		if self.cleanup then
 			local queue = newTransactionQueue(self.fullName, true)
 			local cleanupArgs = {}
@@ -592,6 +606,17 @@ local Package = {
 	upgrade = function(self, env)
 		if not package.installed[self.fullName] then return false end
 		local queue = newTransactionQueue(self.fullName)
+  
+  --Download Manpage
+  if string.len(self.man) > 0 then
+    local manpage = http.get(self.man)
+    local mancon = manpage.readAll()
+    local manfile = fs.open("/usr/man/"..self.name,"w")
+    manfile.write(mancon)
+    manfile.close()
+    manpage.close()
+  end
+  
 		if updateTypes[self.download.type] == "incremental" then
 			local updatedFiles = {}
 			local contents = lookupFunctions[self.download.type](self)
@@ -650,6 +675,7 @@ function new(name, repo)
 		size = 0,
 		category = {},
 		dependencies = {},
+  man = "",
 		--installation folder target
 		target = "/usr/bin",
 		setup = nil,
@@ -731,7 +757,7 @@ local function addPacks(file)
 						state = "dirty"
 					end
 				end
-			elseif property == "target" or property == "setup" or property == "update" or property == "cleanup" or property == "version" or property == "size" then
+			elseif property == "target" or property == "man" or property == "setup" or property == "update" or property == "cleanup" or property == "version" or property == "size" then
 				if state == "main" then
 					entryTable[property] = value
 				else
