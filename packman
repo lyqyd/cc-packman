@@ -276,16 +276,38 @@ if #mode > 0 then
 	end
 	table.sort(categorySorted)
 
+	local badPackages = {}
 	--flesh out dependencies
 	for pName, pData in pairs(package.list) do
 		if pData.dependencies then
-			pData.dependencies, errmsg = package.findDependencies(pName, {})
-			if not pData.dependencies then
+			dependencies, errmsg = package.findDependencies(pName, {})
+			if not dependencies then
 				--if dependencies could not be resolved, remove the package.
 				printWarning("Could not resolve dependency on "..errmsg.." in package "..pName)
-				package.list[pName] = nil
+				table.insert(badPackages, pName)
+			else
+				pData.dependencies = dependencies
 			end
 		end
+	end
+	--actual package removal and short-name lookup cleanup.
+	for _, pack in pairs(badPackages) do
+		local entry = package.list[pack]
+		local name = entry.name
+		local others, key = false
+		for k, v in pairs(package.list[name]) do
+			if v == entry then
+				key = k
+			else
+				others = true
+			end
+		end
+		if others then
+			package.list[name][key] = nil
+		else
+			package.list[name] = nil
+		end
+		package.list[pack] = nil
 	end
 end
 
