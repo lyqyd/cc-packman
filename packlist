@@ -4,8 +4,8 @@ name = packman
 		filename = packman
 	category = utility
 	dependencies = none
-	version = 0.2
-	size = 16046
+	version = 0.3
+	size = 17110
 end
 
 name = easy-shell
