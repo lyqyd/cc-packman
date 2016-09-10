@@ -334,6 +334,7 @@ local downloadTypes = {
 		url = true,
 		filename = true,
 	},
+	multi = {},
 	grin = {
 		author = true,
 		repository = true,
@@ -346,6 +347,7 @@ local updateTypes = {
 	bitbucket = "incremental",
 	grin = "replace",
 	raw = "overwrite",
+	multi = "overwrite",
 	pastebin = "overwrite",
 	meta = "overwrite",
 }
@@ -450,6 +452,24 @@ downloadFunctions.raw = function(pack, env, queue)
 	else
 		return false
 	end
+end
+
+downloadFunctions.multi = function(pack, env, queue)
+	local files = pack.download.files
+	for i = 1, #files do
+		local path = fs.combine(pack.target, files[i].name)
+
+		if string.match(path, "(.-)/[^/]+$") then
+			queue:makeDir(string.match(path, "(.-)/[^/]+$"))
+		end
+		local content = raw(files[i].url)
+		if content then
+			queue:addFile(path, content)
+		else
+			return false
+		end
+	end
+	return true
 end
 
 downloadFunctions.github = function(pack, env, queue)
@@ -718,7 +738,12 @@ local function addPacks(file)
 				if state == "main" then
 					entryTable.download.type = string.match(value, "^(%S*)$")
 					if downloadFunctions[entryTable.download.type] then
-						state = "type"
+						if entryTable.download.type == "multi" then
+							entryTable.download.files = {}
+							state = "main"
+						else
+							state = "type"
+						end
 					else
 						if state ~= "dirty" then
 							printWarning("Unknown Repository Format at line "..lineCount.." in "..file)
@@ -730,6 +755,15 @@ local function addPacks(file)
 						printWarning("Unexpected 'type' at line "..lineCount.." in "..file)
 						state = "dirty"
 					end
+				end
+			elseif property == "file" then
+				if entryTable.download.type == "multi" then
+					local fileTable = entryTable.download.files
+					local name, url = string.match(value, "(%S+)%s+(.*)")
+					fileTable[#fileTable + 1] = {name = name, url = url}
+				else
+					printWarning("Unexpected "..property.." at line "..lineCount.." in "..file)
+					state = "dirty"
 				end
 			elseif property == "target" or property == "setup" or property == "update" or property == "cleanup" or property == "version" or property == "size" then
 				if state == "main" then
