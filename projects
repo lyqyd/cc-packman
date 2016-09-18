@@ -27,8 +27,8 @@ name = gpssatellite
 	category = turtle gps
 	dependencies = lyqyd/setup
 	target = /etc/projects
-	version = 0.1
-	size = 9193
+	version = 0.2
+	size = 9187
 end
 
 name = lyqyd-house
