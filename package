@@ -455,7 +455,7 @@ downloadFunctions.raw = function(pack, env, queue)
 end
 
 downloadFunctions.multi = function(pack, env, queue)
-	local files = pack.download.files
+	local files = pack.download.type.files
 	for i = 1, #files do
 		local path = fs.combine(pack.target, files[i].name)
 
@@ -704,6 +704,7 @@ if not fs.exists("/usr/bin") then fs.makeDir("/usr/bin") end
 local function addPacks(file)
 	local packName = fs.getName(file)
 	local state = ""
+	local typeState = nil
 	local listHandle = io.open(file, "r")
 	local entryTable
 	local lineCount = 1
@@ -722,6 +723,7 @@ local function addPacks(file)
 				end
 			end
 			local property,hasValue,value = string.match(line, "^%s*([^=%s]+)%s*(=?)%s*(.-)%s*$")
+			if typeState and property ~= "file" then typeState = nil end
 			hasValue=hasValue~="" or nil
 			if property == "name" and state == "" then
 				if state == "" then
@@ -736,10 +738,11 @@ local function addPacks(file)
 				end
 			elseif property == "type" then
 				if state == "main" then
-					entryTable.download.type = string.match(value, "^(%S*)$")
-					if downloadFunctions[entryTable.download.type] then
-						if entryTable.download.type == "multi" then
-							entryTable.download.files = {}
+					entryTable.download[property] = string.match(value, "^(%S*)$")
+					if downloadFunctions[entryTable.download[property]] then
+						if entryTable.download[property] == "multi" then
+							entryTable.download[property].files = {}
+							typeState = property
 							state = "main"
 						else
 							state = "type"
@@ -757,8 +760,8 @@ local function addPacks(file)
 					end
 				end
 			elseif property == "file" then
-				if entryTable.download.type == "multi" then
-					local fileTable = entryTable.download.files
+				if typeState then
+					local fileTable = entryTable.download[typeState].files 
 					local name, url = string.match(value, "(%S+)%s+(.*)")
 					fileTable[#fileTable + 1] = {name = name, url = url}
 				else
