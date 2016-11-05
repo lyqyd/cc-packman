@@ -11,6 +11,7 @@ local opwords = {
 	update = true,
 	list = true,
 	search = true,
+	bootstrap = true,
 }
 
 local argwords = {
@@ -26,6 +27,7 @@ if #args < 1 or (not opwords[args[1]] and not argwords[args[1]]) then
 	io.write("packman [options] remove <package name[s]>\n")
 	io.write("packman [options] list [pattern]\n")
 	io.write("packman [options] search [pattern]\n")
+	io.write("packman bootstrap\n")
 	io.write("\n")
 	io.write("Options:\n")
 	io.write("fetch\n")
@@ -57,6 +59,7 @@ for i = 1, #args do
 		argCount = argwords[args[i]]
 	elseif opwords[args[i]] then
 		mode = args[i]
+		if mode == "bootstrap" then fetch = false break end
 		argState = "arguments"
 		argCount = 0
 	elseif argState and argCount > 0 then
@@ -99,7 +102,7 @@ local function printInformation(infoText)
 end
 
 local function loadPackageAPI()
-	if not package then if shell.resolveProgram("package") then os.loadAPI(shell.resolveProgram("package")) elseif fs.exists("usr/apis/package") then os.loadAPI("usr/apis/package") elseif not fetch then error("Could not load package API!") end end
+	if not package then if shell.resolveProgram("package") then os.loadAPI(shell.resolveProgram("package")) elseif fs.exists("usr/apis/package") then os.loadAPI("usr/apis/package") elseif not (fetch or mode == "bootstrap") then error("Could not load package API!") end end
 
 	if package then
 		resetScreen()
@@ -140,50 +143,7 @@ local categorySorted = {}
 if fetch then
 	local queue
 	if package and not pack then
-		queue = package.newTransactionQueue("main/packman")
-	end
-	io.write("Updating packman\n")
-	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
-	if remoteHandle then
-		if pack then
-			pack.addFile(shell.getRunningProgram(), remoteHandle.readAll())
-		elseif queue then
-			queue:addFile(shell.getRunningProgram(), remoteHandle.readAll())
-		else
-			local fileHandle = io.open(shell.getRunningProgram(), "w")
-			if fileHandle then
-				fileHandle:write(remoteHandle.readAll())
-				fileHandle:close()
-			else
-				printWarning("Could not write file "..shell.getRunningProgram())
-			end
-		end
-		remoteHandle.close()
-	else
-		printWarning("Could not retrieve remote file.")
-	end
-	io.write("Updating package API\n")
-	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/package")
-	if remoteHandle then
-		if pack then
-			pack.makeDir("/usr/apis")
-			pack.addFile("/usr/apis/package", remoteHandle.readAll())
-		elseif queue then
-			queue:makeDir("/usr/apis")
-			queue:addFile("/usr/apis/package", remoteHandle.readAll())
-		else
-			if not fs.exists("/usr/apis") then fs.makeDir("/usr/apis") end
-			local fileHandle = io.open("/usr/apis/package", "w")
-			if fileHandle then
-				fileHandle:write(remoteHandle.readAll())
-				fileHandle:close()
-			else
-				printWarning("Could not write file /usr/apis/package")
-			end
-		end
-		remoteHandle.close()
-	else
-		printWarning("Could not retrieve remote file.")
+		queue = package.newTransactionQueue("main/package")
 	end
 	io.write("Fetching Repository List\n")
 	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
@@ -390,7 +350,98 @@ local function upgrade(name)
 	return raw_package_operation(name, "upgrade")
 end
 
-if mode == "install" then
+if mode == "bootstrap" then
+	--initial setup, results in main/packman and main/package packages being installed
+	local manQueue, ageQueue
+	if not package then
+		--grab the package API, since we have no transaction queue yet.
+		io.write("Updating package API\n")
+		remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/package")
+		local contents = ""
+		if remoteHandle then
+			if not fs.exists("/usr/apis") then fs.makeDir("/usr/apis") end
+			local fileHandle = io.open("/usr/apis/package", "w")
+			if fileHandle then
+				contents = remoteHandle.readAll()
+				fileHandle:write(contents)
+				fileHandle:close()
+			else
+				printWarning("Could not write file /usr/apis/package")
+			end
+			remoteHandle.close()
+		else
+			printWarning("Could not retrieve remote file.")
+		end
+		--load it up, so we can use it!
+		loadPackageAPI()
+		if not package then printError("Package API required for bootstrap!") end
+
+		ageQueue = package.newTransactionQueue("main/package")
+		ageQueue:addFile("/usr/apis/package", contents)
+	elseif package then
+		ageQueue = package.newTransactionQueue("main/package")
+	end
+
+	if package then
+		manQueue = package.newTransactionQueue("main/packman")
+	end
+	io.write("Updating packman\n")
+	local remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/packman")
+	if remoteHandle then
+		manQueue:addFile(shell.getRunningProgram(), remoteHandle.readAll())
+		remoteHandle.close()
+	else
+		printWarning("Could not retrieve remote file.")
+	end
+
+	if #ageQueue.transactions == 0 then
+		io.write("Updating package API\n")
+		remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/package")
+		if remoteHandle then
+			ageQueue:makeDir("/usr/apis")
+			ageQueue:addFile("/usr/apis/package", remoteHandle.readAll())
+			remoteHandle.close()
+		else
+			printWarning("Could not retrieve remote file.")
+		end
+	end
+	io.write("Fetching Repository List\n")
+	local repolistContent
+	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
+	if remoteHandle then
+		repolistContent = remoteHandle.readAll()
+		ageQueue:makeDir("/etc")
+		ageQueue:addFile("/etc/repolist", repolistContent)
+		remoteHandle.close()
+	else
+		printWarning("could not retrieve remote file.")
+	end
+	if repolistContent then
+		ageQueue:makeDir("/etc/repositories")
+
+		for line in string.gmatch(repoListContent, "([^\n]+)\n?") do
+			local file, url = string.match(line, "^(%S*)%s*(.*)")
+			if file and url then
+				io.write("Fetching Repository: "..file.."\n")
+				local remoteHandle = http.get(url)
+				if remoteHandle then
+					ageQueue:addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
+					remoteHandle.close()
+				else
+					printWarning("Could not retrieve remote file: "..file)
+				end
+			end
+		end
+	end
+
+	if manQueue then manQueue:finish() end
+	if ageQueue then ageQueue:finish() end
+
+		--reload package API.
+		os.unloadAPI("package")
+		loadPackageAPI()
+	end
+elseif mode == "install" then
 	if #operation.arguments >= 1 then
 		local installList = {}
 		for packageNumber, packageName in ipairs(operation.arguments) do
