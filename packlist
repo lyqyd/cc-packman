@@ -27,5 +27,5 @@ name = package
 	category = utility api
 	dependencies = none
 	version = 0.1
-	size = 1
+	size = 27431
 end
