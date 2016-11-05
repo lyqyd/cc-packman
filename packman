@@ -29,11 +29,11 @@ if #args < 1 or (not opwords[args[1]] and not argwords[args[1]]) then
 	io.write("\n")
 	io.write("Options:\n")
 	io.write("fetch\n")
-	io.write("    Update repository and package lists before performing operations (can be used without an operation)\n")
+	io.write("  Update repository and package lists before performing operations (can be used without an operation)\n")
 	io.write("force\n")
-	io.write("    Force yes answers when manipulating packages\n")
+	io.write("  Force yes answers when manipulating packages\n")
 	io.write("target <directory>\n")
-	io.write("    Set root directory to install packages in\n")
+	io.write("  Set root directory to install packages in\n")
 	return
 end
 
