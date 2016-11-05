@@ -354,10 +354,10 @@ local updateTypes = {
 
 local lookupFunctions = {}
 
-lookupFunctions.github = function(package)
+lookupFunctions.github = function(info)
 	local function getDirectoryContents(path)
 		local fType, fPath, fVer = {}, {}, {}
-		local response = http.get("https://api.github.com/repos/"..package.download.author.."/"..package.download.repository.."/contents/"..path.."?ref="..package.download.branch)
+		local response = http.get("https://api.github.com/repos/"..info.author.."/"..info.repository.."/contents/"..path.."?ref="..info.branch)
 		if response then
 			response = response.readAll()
 			if response ~= nil then
@@ -390,10 +390,10 @@ lookupFunctions.github = function(package)
 	return addDirectoryContents("", {})
 end
 
-lookupFunctions.bitbucket = function(package)
+lookupFunctions.bitbucket = function(info)
 	local function getDirectoryContents(path)
 		local directoryContents = {}
-		local response = http.get("https://api.bitbucket.org/1.0/repositories/"..package.download.author.."/"..package.download.repository.."/src/"..package.download.branch..path)
+		local response = http.get("https://api.bitbucket.org/1.0/repositories/"..info.author.."/"..info.repository.."/src/"..info.branch..path)
 		if response then
 			response = response.readAll()
 			if response ~= nil then
@@ -438,14 +438,14 @@ end
 
 local downloadFunctions = {}
 
-downloadFunctions.raw = function(pack, env, queue)
+downloadFunctions.raw = function(pack, env, queue, info)
 	-- Delegate to local raw
-	local path = fs.combine(pack.target, pack.download.filename)
+	local path = fs.combine(pack.target, info.filename)
 
 	if string.match(path, "(.-)/[^/]+$") then
 		queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 	end
-	local content = raw(pack.download.url)
+	local content = raw(info.url)
 	if content then
 		queue:addFile(path, content)
 		return true
@@ -454,8 +454,8 @@ downloadFunctions.raw = function(pack, env, queue)
 	end
 end
 
-downloadFunctions.multi = function(pack, env, queue)
-	local files = pack.download.type.files
+downloadFunctions.multi = function(pack, env, queue, info)
+	local files = info.files
 	for i = 1, #files do
 		local path = fs.combine(pack.target, files[i].name)
 
@@ -472,8 +472,8 @@ downloadFunctions.multi = function(pack, env, queue)
 	return true
 end
 
-downloadFunctions.github = function(pack, env, queue)
-	local contents = lookupFunctions.github(pack)
+downloadFunctions.github = function(pack, env, queue, info)
+	local contents = lookupFunctions.github(info)
 	if not contents then return nil, "content fetch failure" end
 	local localTarget = pack.target or ""
 	for num, file in ipairs(contents) do
@@ -481,7 +481,7 @@ downloadFunctions.github = function(pack, env, queue)
 		if string.match(path, "(.-)/[^/]+$") then
 			queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 		end
-		local content = raw("https://raw.github.com/"..pack.download.author.."/"..pack.download.repository.."/"..pack.download.branch.."/"..file.path)
+		local content = raw("https://raw.github.com/"..info.author.."/"..info.repository.."/"..info.branch.."/"..file.path)
 		if content then
 			queue:addFile(path, content, file.version)
 		else
@@ -491,15 +491,15 @@ downloadFunctions.github = function(pack, env, queue)
 	return true
 end
 
-downloadFunctions.bitbucket = function(pack, env, queue)
-	local contents = lookupFunctions.bitbucket(pack)
+downloadFunctions.bitbucket = function(pack, env, queue, info)
+	local contents = lookupFunctions.bitbucket(info)
 	local localTarget = pack.target or ""
 	for num, file in ipairs(contents) do
 		local path = fs.combine(localTarget, file.path)
 		if string.match(path, "(.-)/[^/]+$") then
 			queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 		end
-		local content = raw("https://bitbucket.org/"..pack.download.author.."/"..pack.download.repository.."/raw/"..pack.download.branch.."/"..file.path)
+		local content = raw("https://bitbucket.org/"..info.author.."/"..info.repository.."/raw/"..info.branch.."/"..file.path)
 		if content then
 			queue:addFile(path, content, file.version)
 		else
@@ -509,13 +509,13 @@ downloadFunctions.bitbucket = function(pack, env, queue)
 	return true
 end
 
-downloadFunctions.pastebin = function(pack, env, queue)
-	local path = fs.combine(pack.target, pack.download.filename) 
+downloadFunctions.pastebin = function(pack, env, queue, info)
+	local path = fs.combine(pack.target, info.filename) 
 
 	if string.match(path, "(.-)/[^/]+$") then
 		queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 	end
-	local content = raw("http://pastebin.com/raw.php?i="..pack.download.url)
+	local content = raw("http://pastebin.com/raw.php?i="..info.url)
 	if content then
 		queue:addFile(path, content)
 		return true
@@ -524,11 +524,11 @@ downloadFunctions.pastebin = function(pack, env, queue)
 	end
 end
 
-downloadFunctions.grin = function(pack, env, queue)
+downloadFunctions.grin = function(pack, env, queue, info)
 	local fullName = pack.repo.."/"..pack.name
 	local status
 	parallel.waitForAny(function()
-		status = env.shell.run("pastebin run VuBNx3va -e -u", pack.download.author, "-r", pack.download.repository, fs.combine(fs.combine(package.installRoot, pack.target), pack.name))
+		status = env.shell.run("pastebin run VuBNx3va -e -u", info.author, "-r", info.repository, fs.combine(fs.combine(package.installRoot, pack.target), pack.name))
 	end, function()
 		while true do
 			local e, msg = os.pullEvent("grin_install_status")
