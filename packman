@@ -146,18 +146,20 @@ if fetch then
 		queue = package.newTransactionQueue("main/package")
 	end
 	io.write("Fetching Repository List\n")
+	local repolistContent
 	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
 	if remoteHandle then
+		repolistContent = remoteHandle.readAll()
 		if pack then
 			pack.makeDir("/etc")
-			pack.addFile("/etc/repolist", remoteHandle.readAll())
+			pack.addFile("/etc/repolist", repolistContent)
 		elseif queue then
 			queue:makeDir("/etc")
-			queue:addFile("/etc/repolist", remoteHandle.readAll())
+			queue:addFile("/etc/repolist", repolistContent)
 		else
 			local fileHandle = io.open("/etc/repolist", "w")
 			if fileHandle then
-				fileHandle:write(remoteHandle.readAll())
+				fileHandle:write(repolistContent)
 				fileHandle:close()
 			else
 				printWarning("Could not write file /etc/repolist")
@@ -167,7 +169,7 @@ if fetch then
 	else
 		printWarning("could not retrieve remote file.")
 	end
-	if fs.exists("/etc/repolist") then
+	if repolistContent then
 		if pack then
 			pack.makeDir("/etc/repositories")
 		elseif queue then
@@ -176,35 +178,32 @@ if fetch then
 			if not fs.exists("/etc/repositories") then fs.makeDir("/etc/repositories") end
 		end
 
-		local handle = io.open("/etc/repolist", "r")
-		if handle then
-			for line in handle:lines() do
-				local file, url = string.match(line, "^(%S*)%s*(.*)")
-				if file and url then
-					io.write("Fetching Repository: "..file.."\n")
-					local remoteHandle = http.get(url)
-					if remoteHandle then
-						if pack then
-							pack.addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
-						elseif queue then
-							queue:addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
-						else
-							local fileHandle = io.open(fs.combine("/etc/repositories", file), "w")
-							if fileHandle then
-								fileHandle:write(remoteHandle.readAll())
-								fileHandle:close()
-							else
-								printWarning("Could not write file: "..fs.combine("/etc/repositories", file))
-							end
-						end
-						remoteHandle.close()
+		for line in string.gmatch(repolistContent, "([^\n]+)\n?") do
+			local file, url = string.match(line, "^(%S*)%s*(.*)")
+			if file and url then
+				io.write("Fetching Repository: "..file.."\n")
+				local remoteHandle = http.get(url)
+				if remoteHandle then
+					if pack then
+						pack.addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
+					elseif queue then
+						queue:addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
 					else
-						printWarning("Could not retrieve remote file: "..file)
+						local fileHandle = io.open(fs.combine("/etc/repositories", file), "w")
+						if fileHandle then
+							fileHandle:write(remoteHandle.readAll())
+							fileHandle:close()
+						else
+							printWarning("Could not write file: "..fs.combine("/etc/repositories", file))
+						end
 					end
+					remoteHandle.close()
+				else
+					printWarning("Could not retrieve remote file: "..file)
 				end
 			end
 		else
-			printError("Failed to open repository list")
+			printError("Failed to fetch repository list")
 		end
 	end
 
@@ -419,7 +418,7 @@ if mode == "bootstrap" then
 	if repolistContent then
 		ageQueue:makeDir("/etc/repositories")
 
-		for line in string.gmatch(repoListContent, "([^\n]+)\n?") do
+		for line in string.gmatch(repolistContent, "([^\n]+)\n?") do
 			local file, url = string.match(line, "^(%S*)%s*(.*)")
 			if file and url then
 				io.write("Fetching Repository: "..file.."\n")
