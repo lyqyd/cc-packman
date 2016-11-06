@@ -6,7 +6,7 @@ name = packman
 	category = utility
 	dependencies = main/package
 	version = 0.4
-	size = 18128
+	size = 16816
 end
 
 name = easy-shell
