@@ -100,7 +100,7 @@ Most of the arguments are self-explanatory.  Note that the pastebin `url` argume
 
 ### 6.1.3 - Version Number
 
-Version numbers must be able to be successfully tonumber()'d for comparison purposes.
+Version numbers must be unique for each version of your package. Any time the version number changes, the package will be recognized as having an update available.
 
 ### 6.1.4 - Dependencies
 
