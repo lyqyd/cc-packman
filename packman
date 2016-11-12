@@ -141,18 +141,15 @@ local categorySorted = {}
 
 if fetch then
 	local queue
-	if package and not pack then
+	if package then
 		queue = package.newTransactionQueue("main/package")
 	end
 	io.write("Fetching Repository List\n")
 	local repolistContent
-	remoteHandle = http.get("https://raw.github.com/lyqyd/cc-packman/master/repolist")
+	remoteHandle = http.get("https://raw.githubusercontent.com/lyqyd/cc-packman/master/repolist")
 	if remoteHandle then
 		repolistContent = remoteHandle.readAll()
-		if pack then
-			pack.makeDir("/etc")
-			pack.addFile("/etc/repolist", repolistContent)
-		elseif queue then
+		if queue then
 			queue:makeDir("/etc")
 			queue:addFile("/etc/repolist", repolistContent)
 		else
@@ -169,9 +166,7 @@ if fetch then
 		printWarning("could not retrieve remote file.")
 	end
 	if repolistContent then
-		if pack then
-			pack.makeDir("/etc/repositories")
-		elseif queue then
+		if queue then
 			queue:makeDir("/etc/repositories")
 		else
 			if not fs.exists("/etc/repositories") then fs.makeDir("/etc/repositories") end
@@ -183,9 +178,7 @@ if fetch then
 				io.write("Fetching Repository: "..file.."\n")
 				local remoteHandle = http.get(url)
 				if remoteHandle then
-					if pack then
-						pack.addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
-					elseif queue then
+					if queue then
 						queue:addFile(fs.combine("/etc/repositories", file), remoteHandle.readAll())
 					else
 						local fileHandle = io.open(fs.combine("/etc/repositories", file), "w")
