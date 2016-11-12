@@ -4,11 +4,11 @@
 
 ## 1.1 - Manual Installation
 
-To manually install packman, download the `packman` file and place it at /usr/bin/packman in a ComputerCraft device.  Run `/usr/bin/packman fetch` to download the other necessary files.  You will probably want to add /usr/bin to your shell path to make packman easier to use.  All following commands assume that this is done.
+To manually install packman, download the `packman` file and place it at /usr/bin/packman in a ComputerCraft device.  Run `/usr/bin/packman bootstrap` to download the other necessary files.  You will probably want to add /usr/bin to your shell path to make packman easier to use.  All following commands assume that this is done.
 
 ## 1.2 - Automatic Pastebin Installation
 
-Run the command `pastebin run 4zyreNZy` to automatically download packman, which will also perform the initial fetch operation and install the `main/easy-shell` package to add /usr/bin to the shell path to make packman easier to use in the future.
+Run the command `pastebin run 4zyreNZy` to automatically download packman, which will also perform the initial bootstrap operation and install the `main/easy-shell` package to add /usr/bin to the shell path to make packman easier to use in the future.
 
 # 2 - Installing a Package
 
