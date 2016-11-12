@@ -2,10 +2,11 @@ name = packman
 	type = raw
 		url = https://raw.githubusercontent.com/lyqyd/cc-packman/master/packman
 		filename = packman
+	setup = packman fetch
 	category = utility
-	dependencies = none
-	version = 0.3
-	size = 17110
+	dependencies = main/package
+	version = 0.4
+	size = 16816
 end
 
 name = easy-shell
@@ -18,4 +19,14 @@ name = easy-shell
 	dependencies = none
 	version = 0.2
 	size = 1626
+end
+
+name = package
+	type = raw
+		url = https://raw.githubusercontent.com/lyqyd/cc-packman/master/package
+		filename = package
+	category = utility api
+	dependencies = none
+	version = 0.1
+	size = 27431
 end
