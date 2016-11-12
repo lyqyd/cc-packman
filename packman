@@ -201,8 +201,6 @@ if fetch then
 					printWarning("Could not retrieve remote file: "..file)
 				end
 			end
-		else
-			printError("Failed to fetch repository list")
 		end
 	end
 
@@ -219,7 +217,7 @@ if fetch then
 	end
 end
 
-if #mode > 0 then
+if #mode > 0 and package then
 	for n, v in pairs(package.list) do
 		if v.category then
 			for category in pairs(v.category) do
@@ -354,12 +352,12 @@ if mode == "bootstrap" then
 		--grab the package API, since we have no transaction queue yet.
 		io.write("Updating package API\n")
 		remoteHandle = http.get("https://raw.githubusercontent.com/lyqyd/cc-packman/master/package")
-		local contents = ""
+		local apiContents = ""
 		if remoteHandle then
 			if not fs.exists("/usr/apis") then fs.makeDir("/usr/apis") end
 			local fileHandle = io.open("/usr/apis/package", "w")
 			if fileHandle then
-				contents = remoteHandle.readAll()
+				apiContents = remoteHandle.readAll()
 				fileHandle:write(contents)
 				fileHandle:close()
 			else
@@ -370,31 +368,40 @@ if mode == "bootstrap" then
 			printWarning("Could not retrieve remote file.")
 		end
 
-		--load it up, so we can use it!
-		loadPackageAPI()
-		if not package then printError("Package API required for bootstrap!") end
-
-		local queue = package.newTransactionQueue("main/package")
-		queue:addFile("/usr/apis/package", contents)
-
 		io.write("Fetching main package list\n")
-		remoteHAndle = http.get("https://raw.githubusercontent.com/lyqyd/cc-packman/master/packlist")
+		remoteHandle = http.get("https://raw.githubusercontent.com/lyqyd/cc-packman/master/packlist")
+		local packlistContents = ""
 		if remoteHandle then
-			queue:makeDir("/etc")
-			queue:makeDir("/etc/repositories")
-			queue:addFile("/etc/repositories/main", remoteHandle.readAll())
+			if not fs.exists("/etc/repositories") then fs.makeDir("/etc/repositories") end
+			local fileHandle = io.open("/etc/repositories/main", "w")
+			if fileHandle then
+				packlistContents = remoteHandle.readAll()
+				fileHandle:write(packlistContents)
+				fileHandle:close()
+			else
+				printWarning("Could not write file /etc/repositories/main")
+			end
 			remoteHandle.close()
 		else
 			printWarning("Could not retrieve remote file.")
 		end
 
-		queue:finish()
-
 		os.unloadAPI("package")
 		loadPackageAPI()
+		if not package then printError("Package API required for bootstrap!") end
+
+		--re-do the file writes for the files above so they end up in the package file list.
+		local queue = package.newTransactionQueue("main/package")
+		queue:makeDir("/usr")
+		queue:makeDir("/usr/apis")
+		queue:addFile("/usr/apis/package", apiContents)
+		queue:makeDir("/etc")
+		queue:makeDir("/etc/repositories")
+		queue:addFile("/etc/repositories/main", packlistContents)
+		queue:finish()
 	end
 
-	package.list["main/packman"]:install()
+	package.list["main/packman"]:install(getfenv())
 
 	--reload package API.
 	os.unloadAPI("package")
