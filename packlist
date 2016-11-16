@@ -26,6 +26,7 @@ name = package
 		url = https://raw.githubusercontent.com/lyqyd/cc-packman/master/package
 		filename = package
 	category = utility api
+	target = /usr/apis
 	dependencies = none
 	version = 0.1
 	size = 27431
