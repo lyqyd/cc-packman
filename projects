@@ -60,8 +60,8 @@ name = storage-top
 	category = turtle
 	dependencies = lyqyd/setup
 	target = /etc/projects
-	version = 0.2
-	size = 12150
+	version = 0.3
+	size = 11280
 end
 
 name = storage-layer
