@@ -194,3 +194,45 @@ name = lyqyd-suite
 	version = 0.1
 	size = 0
 end
+
+name = inv-base
+	type = raw
+		url = https://raw.githubusercontent.com/lyqyd/cc-inventory/master/base
+		filename = base
+	category = base automation inventory api
+	dependencies = none
+	target = /usr/apis
+	version = 0.1
+	size = 13814
+end
+
+name = inv-flight
+	type = raw
+		url = https://raw.githubusercontent.com/lyqyd/cc-inventory/master/flight
+		filename = flight
+	category = base automation inventory api
+	dependencies = none
+	target = /usr/apis
+	version = 0.1
+	size = 5266
+end
+
+name = inv-base-master
+	type = raw
+		url = https://raw.githubusercontent.com/lyqyd/cc-inventory/master/base-master
+		filename = base-master
+	category = base automation inventory
+	dependencies = lyqyd/inv-base lyqyd/inv-flight
+	version = 0.1
+	size = 21337
+end
+
+name = inv-inventory
+	type = raw
+		url = https://raw.githubusercontent.com/lyqyd/cc-inventory/master/inventory
+		filename = inventory
+	category = base automation inventory
+	dependencies = lyqyd/inv-base lyqyd/inv-flight
+	version = 0.1
+	size = 12978
+end
