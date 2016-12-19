@@ -74,3 +74,14 @@ name = storage-layer
 	version = 0.1
 	size = 2632
 end
+
+name = storage-init
+	type = raw
+		url = https://raw.githubusercontent.com/lyqyd/cc-generalized-setup/master/projects/storage-init
+		filename = storage-init
+	category = turtle
+	dependencies = lyqyd/setup
+	target = /etc/projects
+	version = 0.1
+	size = 8041
+end
