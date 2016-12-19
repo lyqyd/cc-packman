@@ -82,6 +82,6 @@ name = storage-init
 	category = turtle
 	dependencies = lyqyd/setup
 	target = /etc/projects
-	version = 0.1
-	size = 8041
+	version = 0.2
+	size = 8034
 end
