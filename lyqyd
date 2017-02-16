@@ -159,8 +159,8 @@ name = lnfs-daemon
 	category = rednet server
 	dependencies = lyqyd/lyqydnet lyqyd/configuration
 	target = /usr/bin
-	version = 0.2
-	size = 6611
+	version = 0.3
+	size = 6650
 end
 
 name = lnfs-client
