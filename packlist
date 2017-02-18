@@ -28,6 +28,6 @@ name = package
 	category = utility api
 	target = /usr/apis
 	dependencies = none
-	version = 0.1
-	size = 27431
+	version = 0.2
+	size = 28393
 end

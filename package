@@ -616,7 +616,7 @@ local Package = {
 		local queue = newTransactionQueue(self.fullName)
 		if updateTypes[self.download.type.type] == "incremental" then
 			local updatedFiles = {}
-			local contents = lookupFunctions[self.download.type.type](self)
+			local contents = lookupFunctions[self.download.type.type](self.download.type)
 			for num, file in ipairs(contents) do
 				local path = fs.combine(self.target, file.path)
 				if file.version ~= findInstalledVersionByPath(self.fullName, path) then
@@ -624,14 +624,14 @@ local Package = {
 						queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 					end
 					if self.download.type.type == "github" then
-						local content = raw("https://raw.github.com/"..self.download.author.."/"..self.download.repository.."/"..self.download.branch.."/"..file.path)
+						local content = raw("https://raw.github.com/"..self.download.type.author.."/"..self.download.type.repository.."/"..self.download.type.branch.."/"..file.path)
 						if content then
 							queue:addFile(path, content, file.version)
 						else
 							return false
 						end
 					elseif self.download.type.type == "bitbucket" then
-						local content = raw("https://bitbucket.org/"..self.download.author.."/"..self.download.repository.."/raw/"..self.download.branch.."/"..file.path)
+						local content = raw("https://bitbucket.org/"..self.download.type.author.."/"..self.download.type.repository.."/raw/"..self.download.type.branch.."/"..file.path)
 						if content then
 							queue:addFile(path, content, file.version)
 						else
