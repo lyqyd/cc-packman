@@ -8,8 +8,8 @@ name = LyqydOS
 	cleanup = installer remove
 	dependencies = lyqyd/framebuffer lyqyd/configuration lyqyd/lsh
 	target = /LyqydOS
-	version = 1.9.6
-	size = 138574
+	version = 1.9.7
+	size = 138530
 end
 
 name = LyqydNet
@@ -21,7 +21,7 @@ name = LyqydNet
 	dependencies = none
 	target = /usr
 	version = 1.6
-	size = 46401
+	size = 46983
 end
 
 name = lsh
