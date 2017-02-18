@@ -20,7 +20,7 @@ name = LyqydNet
 	category = networking rednet api
 	dependencies = none
 	target = /usr
-	version = 1.6
+	version = 1.7
 	size = 46983
 end
 
