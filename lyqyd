@@ -8,8 +8,8 @@ name = LyqydOS
 	cleanup = installer remove
 	dependencies = lyqyd/framebuffer lyqyd/configuration lyqyd/lsh
 	target = /LyqydOS
-	version = 1.9.5
-	size = 138236
+	version = 1.9.6
+	size = 138574
 end
 
 name = LyqydNet
@@ -20,8 +20,8 @@ name = LyqydNet
 	category = networking rednet api
 	dependencies = none
 	target = /usr
-	version = 1.5
-	size = 46169
+	version = 1.6
+	size = 46401
 end
 
 name = lsh
@@ -31,8 +31,8 @@ name = lsh
 		branch = master
 	category = shell
 	dependencies = none
-	version = 0.2
-	size = 23241
+	version = 0.3
+	size = 27285
 end
 
 name = location
@@ -171,8 +171,8 @@ name = lnfs-client
 	category = rednet fs
 	dependencies = lyqyd/lyqydos lyqyd/lyqydnet
 	target = /usr/bin
-	version = 0.2
-	size = 3662
+	version = 0.3
+	size = 3747
 end
 
 name = raidtools
