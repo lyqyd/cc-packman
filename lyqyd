@@ -8,8 +8,8 @@ name = LyqydOS
 	cleanup = installer remove
 	dependencies = lyqyd/framebuffer lyqyd/configuration lyqyd/lsh
 	target = /LyqydOS
-	version = 1.9.8
-	size = 138536
+	version = 1.9.9
+	size = 141599
 end
 
 name = LyqydNet
@@ -31,8 +31,8 @@ name = lsh
 		branch = master
 	category = shell
 	dependencies = none
-	version = 0.3
-	size = 27285
+	version = 0.4
+	size = 27706
 end
 
 name = location
