@@ -11,6 +11,7 @@ local opwords = {
 	list = true,
 	search = true,
 	bootstrap = true,
+    info = true,
 }
 
 local argwords = {
@@ -615,4 +616,38 @@ elseif mode == "search" then
 			end
 		end
 	end
+elseif mode == "info" then
+    if #operation.arguments == 0 then
+        io.write("No package selected\n")
+        return
+    end
+    local name = lookupPackage(operation.arguments[1])
+    local info = package.list[name]
+    if info == nil then
+        io.write("Package not found\n")
+        return
+    end
+    io.write("Name: "..info.name.."\n")
+    io.write("Repository: "..info.repo.."\n")
+    io.write("Category: ")
+    for cate,_ in pairs(info.category) do
+        io.write(cate.." ")
+    end
+    io.write("\n")
+    io.write("Version: "..info.version.."\n")
+    io.write("Size: "..info.size.." Bytes\n")
+    io.write("Target: "..info.target.."\n")
+    io.write("Filename: "..info.download.type.filename.."\n")
+    io.write("Dependecies: ")
+    local testdep = false
+    info.dependencies[name] = nil
+    for dep,_ in pairs(info.dependencies) do
+        io.write(dep.." ")
+        testdep = true
+    end
+    if testdep == false then
+        io.write("None")
+    end
+    io.write("\n")
+    io.write("Description: "..info.description.."\n")
 end
