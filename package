@@ -676,7 +676,8 @@ function new(name, repo)
 		target = "/usr/bin",
 		setup = nil,
 		remove = nil,
-		download = {}
+		download = {},
+        description = "None",
 	}
 
 	setmetatable(p, pmetatable)
@@ -770,7 +771,7 @@ local function addPacks(file)
 					printWarning("Unexpected "..property.." at line "..lineCount.." in "..file)
 					state = "dirty"
 				end
-			elseif property == "target" or property == "setup" or property == "update" or property == "cleanup" or property == "version" or property == "size" then
+			elseif property == "target" or property == "setup" or property == "update" or property == "cleanup" or property == "version" or property == "size" or property == "description" then
 				if state == "main" then
 					entryTable[property] = value
 				else
