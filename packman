@@ -1,6 +1,6 @@
 local unpack = unpack or table.unpack
 
-os.unloadAPI("package")
+os.unloadAPI("packapi")
 
 local args = {...}
 
@@ -114,14 +114,14 @@ local function getUserInput(default)
 end
 
 local function loadPackageAPI()
-	if not package then if shell.resolveProgram("package") then os.loadAPI(shell.resolveProgram("package")) elseif fs.exists("usr/apis/package") then os.loadAPI("usr/apis/package") elseif not (fetch or mode == "bootstrap") then error("Could not load package API!") end end
+	if not packapi then if shell.resolveProgram("packapi") then os.loadAPI(shell.resolveProgram("packapi")) elseif fs.exists("usr/apis/packapi") then os.loadAPI("usr/apis/packapi") elseif not (fetch or mode == "bootstrap") then error("Could not load package API!") end end
 
-	if package then
+	if packapi then
 		resetScreen()
 		io.write("Loading database...\n")
-		package.installRoot = target
+		packapi.installRoot = target
 
-		local co = coroutine.create(package.load)
+		local co = coroutine.create(packapi.load)
 		local event, filter, passback = {}
 		while true do
 			if (filter and (filter == event[1] or event[1] == "terminate")) or not filter then
@@ -154,8 +154,8 @@ local categorySorted = {}
 
 if fetch then
 	local queue
-	if package then
-		queue = package.newTransactionQueue("main/package")
+	if packapi then
+		queue = packapi.newTransactionQueue("main/packapi")
 	end
 	io.write("Fetching Repository List\n")
 	local repolistContent
@@ -218,13 +218,13 @@ if fetch then
 
 	if #mode > 0 then
 		--reload package API.
-		os.unloadAPI("package")
+		os.unloadAPI("packapi")
 		loadPackageAPI()
 	end
 end
 
-if #mode > 0 and package then
-	for n, v in pairs(package.list) do
+if #mode > 0 and packapi then
+	for n, v in pairs(packapi.list) do
 		if v.category then
 			for category in pairs(v.category) do
 				if not categoryList[category] then
@@ -240,11 +240,11 @@ if #mode > 0 and package then
 
 	local badPackages = {}
 	--flesh out dependencies
-	for pName, pData in pairs(package.list) do
+	for pName, pData in pairs(packapi.list) do
 		if pData.dependencies then
-			dependencies, errmsg = package.findDependencies(pName, {})
+			dependencies, errmsg = packapi.findDependencies(pName, {})
 			if not dependencies then
-				--if dependencies could not be resolved, remove the package.
+				--if dependencies could not be resolved, remove the packapi.
 				printWarning("Could not resolve dependency on "..errmsg.." in package "..pName)
 				table.insert(badPackages, pName)
 			else
@@ -254,10 +254,10 @@ if #mode > 0 and package then
 	end
 	--actual package removal and short-name lookup cleanup.
 	for _, pack in pairs(badPackages) do
-		local entry = package.list[pack]
+		local entry = packapi.list[pack]
 		local name = entry.name
 		local others, key = false
-		for k, v in pairs(package.list[name]) do
+		for k, v in pairs(packapi.list[name]) do
 			if v == entry then
 				key = k
 			else
@@ -265,26 +265,26 @@ if #mode > 0 and package then
 			end
 		end
 		if others then
-			package.list[name][key] = nil
+			packapi.list[name][key] = nil
 		else
-			package.list[name] = nil
+			packapi.list[name] = nil
 		end
-		package.list[pack] = nil
+		packapi.list[pack] = nil
 	end
 end
 
 local function lookupPackage(name, installedOnly)
-	if package.list[name] and not package.list[name].dependencies then
+	if packapi.list[name] and not packapi.list[name].dependencies then
 		local options = {}
-		if installedOnly and package.installed[name] then
-			for name, pack in pairs(package.installed[name]) do
+		if installedOnly and packapi.installed[name] then
+			for name, pack in pairs(packapi.installed[name]) do
 				table.insert(options, name)
 			end
 		elseif installedOnly then
 			--using installedOnly, but no packages of that name are installed.
 			return false
 		else
-			for name, pack in pairs(package.list[name]) do
+			for name, pack in pairs(packapi.list[name]) do
 				table.insert(options, name)
 			end
 		end
@@ -304,7 +304,7 @@ local function lookupPackage(name, installedOnly)
 		else
 			return false
 		end
-	elseif package.list[name] then
+	elseif packapi.list[name] then
 		--since it must have a dependencies table, the name is already fully unique.
 		return name
 	else
@@ -313,7 +313,7 @@ local function lookupPackage(name, installedOnly)
 end
 
 local function raw_package_operation(name, funcName)
-	local pack = package.list[name]
+	local pack = packapi.list[name]
 	if not pack then return nil, "No such package" end
 	local co = coroutine.create(function() return pack[funcName](pack, getfenv()) end)
 	local event, filter, passback = {}
@@ -353,21 +353,21 @@ local function upgrade(name)
 end
 
 if mode == "bootstrap" then
-	--initial setup, results in main/packman and main/package packages being installed
-	if not package or package.list["main/packman"] == nil then
+	--initial setup, results in main/packman and main/packapi packages being installed
+	if not package or packapi.list["main/packman"] == nil then
 		--grab the package API, since we have no transaction queue yet.
 		io.write("Updating package API\n")
-		remoteHandle = http.get("https://raw.githubusercontent.com/lyqyd/cc-packman/master/package")
+		remoteHandle = http.get("https://raw.githubusercontent.com/lyqyd/cc-packman/master/packapi")
 		local apiContents = ""
 		if remoteHandle then
 			if not fs.exists("/usr/apis") then fs.makeDir("/usr/apis") end
-			local fileHandle = io.open("/usr/apis/package", "w")
+			local fileHandle = io.open("/usr/apis/packapi", "w")
 			if fileHandle then
 				apiContents = remoteHandle.readAll()
 				fileHandle:write(apiContents)
 				fileHandle:close()
 			else
-				printWarning("Could not write file /usr/apis/package")
+				printWarning("Could not write file /usr/apis/packapi")
 			end
 			remoteHandle.close()
 		else
@@ -392,25 +392,25 @@ if mode == "bootstrap" then
 			printWarning("Could not retrieve remote file.")
 		end
 
-		os.unloadAPI("package")
+		os.unloadAPI("packapi")
 		loadPackageAPI()
 		if not package then printError("Package API required for bootstrap!") end
 
 		--re-do the file writes for the files above so they end up in the package file list.
-		local queue = package.newTransactionQueue("main/package")
+		local queue = packapi.newTransactionQueue("main/package")
 		queue:makeDir("/usr")
 		queue:makeDir("/usr/apis")
-		queue:addFile("/usr/apis/package", apiContents)
+		queue:addFile("/usr/apis/packapi", apiContents)
 		queue:makeDir("/etc")
 		queue:makeDir("/etc/repositories")
 		queue:addFile("/etc/repositories/main", packlistContents)
 		queue:finish()
 	end
 
-	package.list["main/packman"]:install(getfenv())
+	packapi.list["main/packman"]:install(getfenv())
 
 	--reload package API.
-	os.unloadAPI("package")
+	os.unloadAPI("packapi")
 	loadPackageAPI()
 elseif mode == "install" then
 	if #operation.arguments >= 1 then
@@ -420,8 +420,8 @@ elseif mode == "install" then
 			if not result then
 				printWarning("Could not install package "..packageName..".")
 			else
-				for k,v in pairs(package.list[result].dependencies) do
-					if not package.installed[k] then
+				for k,v in pairs(packapi.list[result].dependencies) do
+					if not packapi.installed[k] then
 						installList[k] = true
 					else
 						if k == result then
@@ -464,12 +464,12 @@ elseif mode == "update" then
 			end
 		end
 	else
-		for k, v in pairs(package.installed) do
+		for k, v in pairs(packapi.installed) do
 			if v.files then
 				--filters out the disambiguation entries.
 				table.insert(updateList, k)
-				for name, info in pairs(package.list[k].dependencies) do
-					if not package.installed[name] then
+				for name, info in pairs(packapi.list[k].dependencies) do
+					if not packapi.installed[name] then
 						installList[name] = true
 					end
 				end
@@ -482,7 +482,7 @@ elseif mode == "update" then
 	end
 	if not forced then
 		for i = #updateList, 1, -1 do
-			if package.installed[updateList[i]].version == package.list[updateList[i]].version then
+			if packapi.installed[updateList[i]].version == packapi.list[updateList[i]].version then
 				table.remove(updateList, i)
 			end
 		end
@@ -535,10 +535,10 @@ elseif mode == "remove" then
 		end
 		dependeesList = {}
 		--find packages which depend on the packages we are removing.
-		for pName, pData in pairs(package.installed) do
+		for pName, pData in pairs(packapi.installed) do
 			if pData.version then
 				if not packageList[pName] then
-					for dName in pairs(package.list[pName].dependencies) do
+					for dName in pairs(packapi.list[pName].dependencies) do
 						for _, packName in pairs(packageList) do
 							if packName == dName then
 								dependeesList[pName] = true
@@ -594,7 +594,7 @@ elseif mode == "list" then
 		--list with matching.
 		match = operation.arguments[1]
 	end
-	for name, info in pairs(package.installed) do
+	for name, info in pairs(packapi.installed) do
 		if info.version then
 			if string.match(name, match) then
 				io.write(name.." "..info.version.."\n")
@@ -608,10 +608,10 @@ elseif mode == "search" then
 		--search using a match
 		match = operation.arguments[1]
 	end
-	for name, info in pairs(package.list) do
+	for name, info in pairs(packapi.list) do
 		if info.version then
 			if string.match(name, match) then
-				io.write((package.installed[name] and "I " or "A " )..name.." "..info.version.."\n")
+				io.write((packapi.installed[name] and "I " or "A " )..name.." "..info.version.."\n")
 			end
 		end
 	end

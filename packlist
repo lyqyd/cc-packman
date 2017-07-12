@@ -4,30 +4,30 @@ name = packman
 		filename = packman
 	setup = packman fetch
 	category = utility
-	dependencies = main/package
-	version = 0.4.1
+	dependencies = main/packapi
+	version = 0.5.1
 	size = 17227
 end
 
 name = easy-shell
-	type = pastebin
-		url = wzWFmaav
+	type = raw
+		url = https://raw.githubusercontent.com/lyqyd/cc-packman/master/easy-shell
 		filename = easy-shell
 	setup = easy-shell install
 	cleanup = easy-shell remove
 	category = shell
 	dependencies = none
-	version = 0.2
+	version = 0.3
 	size = 1626
 end
 
-name = package
+name = packapi
 	type = raw
-		url = https://raw.githubusercontent.com/lyqyd/cc-packman/master/package
-		filename = package
+		url = https://raw.githubusercontent.com/lyqyd/cc-packman/master/packapi
+		filename = packapi
 	category = utility api
 	target = /usr/apis
 	dependencies = none
-	version = 0.2
+	version = 0.3
 	size = 28393
 end
