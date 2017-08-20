@@ -49,7 +49,7 @@ local currentPackage
 
 local Transaction = {
 	writeFile = function(self)
-		local path = fs.combine(package.installRoot, self.path)
+		local path = fs.combine(backpack.installRoot, self.path)
 		if fs.exists(path) then
 			local handle = io.open(path, "r")
 			if handle then
@@ -68,7 +68,7 @@ local Transaction = {
 		return true
 	end,
 	deleteFile = function(self)
-		local path = fs.combine(package.installRoot, self.path)
+		local path = fs.combine(backpack.installRoot, self.path)
 		if fs.exists(path) then
 			local handle = io.open(path, "r")
 			if handle then
@@ -81,7 +81,7 @@ local Transaction = {
 		return not fs.exists(path)
 	end,
 	makeDirectory = function(self)
-		local path = fs.combine(package.installRoot, self.path)
+		local path = fs.combine(backpack.installRoot, self.path)
 		if not fs.exists(path) then
 			printInformation("Creating directory "..path)
 			fs.makeDir(path)
@@ -89,7 +89,7 @@ local Transaction = {
 		return fs.isDir(path)
 	end,
 	removeDirectory = function(self)
-		local path = fs.combine(package.installRoot, self.path)
+		local path = fs.combine(backpack.installRoot, self.path)
 		if fs.exists(path) and fs.isDir(path) and #(fs.list(path)) == 0 then
 			printInformation("Removing directory "..path)
 			fs.delete(path)
@@ -104,7 +104,7 @@ local Transaction = {
 				--found the right entry, modify correctly now.
 				lineFound = true
 				self.contents[i] = newLine
-				updateFileInfo(package.installed[self.pack.fullName].files, self.path, self.version)
+				updateFileInfo(backpack.installed[self.pack.fullName].files, self.path, self.version)
 				break
 			end
 		end
@@ -117,9 +117,9 @@ local Transaction = {
 		for i = 1, #self.contents do
 			if self.path == string.match(self.contents[i], "^([^;]+)") then
 				table.remove(self.contents, i)
-				local entry = findFileEntry(package.installed[self.pack.fullName].files, self.path)
+				local entry = findFileEntry(backpack.installed[self.pack.fullName].files, self.path)
 				if entry then
-					table.remove(package.installed[self.pack.fullName].files, entry)
+					table.remove(backpack.installed[self.pack.fullName].files, entry)
 				end
 				break
 			end
@@ -184,10 +184,10 @@ local TransQueue = {
 		table.insert(self.transactions, newTransaction(self.pack, path, "deleteFile"))
 	end,
 	makeDir = function(self, path)
-		if string.match(path, "(.-)/[^/]+$") and not fs.exists(fs.combine(package.installRoot, string.match(path, "(.-)/[^/]+$"))) then
+		if string.match(path, "(.-)/[^/]+$") and not fs.exists(fs.combine(backpack.installRoot, string.match(path, "(.-)/[^/]+$"))) then
 			self:makeDir(string.match(path, "(.-)/[^/]+$"))
 		end
-		if not fs.exists(fs.combine(package.installRoot, path)) then
+		if not fs.exists(fs.combine(backpack.installRoot, path)) then
 			table.insert(self.transactions, newTransaction(self.pack, path, "makeDirectory"))
 		end
 	end,
@@ -211,7 +211,7 @@ local TransQueue = {
 		}
 	end,
 	finish = function(self)
-		local installedFile = fs.combine(fs.combine(package.installRoot, "/etc/.installed"), self.pack.fullName)
+		local installedFile = fs.combine(fs.combine(backpack.installRoot, "/etc/.installed"), self.pack.fullName)
 		local installedData = {}
 		if installed[self.pack.fullName] and fs.exists(installedFile) then
 			local handle = io.open(installedFile, "r")
@@ -229,12 +229,12 @@ local TransQueue = {
 		end
 
 		--ensure installed table entry exists
-		if not package.installed[self.pack.fullName] then
-			package.installed[self.pack.fullName] = {
+		if not backpack.installed[self.pack.fullName] then
+			backpack.installed[self.pack.fullName] = {
 				version = self.pack.version,
 				files = {},
 			}
-			if not package.installed[self.pack.name] then package.installed[self.pack.name] = {[self.pack.repo] = package.installed[self.pack.fullName]} end
+			if not backpack.installed[self.pack.name] then backpack.installed[self.pack.name] = {[self.pack.repo] = backpack.installed[self.pack.fullName]} end
 		end
 
 		local fileInfoUpdates = {}
@@ -270,23 +270,23 @@ local TransQueue = {
 		if self.removing and #installedData == 0 then
 			fs.delete(installedFile)
 
-			--remove entries from installed packages table if removing package.
-			package.installed[self.pack.name][self.pack.repo] = nil
+			--remove entries from installed packages table if removing backpack.
+			backpack.installed[self.pack.name][self.pack.repo] = nil
 			local othersWithName = false
-			for k, v in pairs(package.installed[self.pack.name]) do
+			for k, v in pairs(backpack.installed[self.pack.name]) do
 				if v then
 					othersWithName = true
 					break
 				end
 			end
 			if not othersWithName then
-				package.installed[self.pack.name] = nil
+				backpack.installed[self.pack.name] = nil
 			end
-			package.installed[self.pack.fullName] = nil
+			backpack.installed[self.pack.fullName] = nil
 		else
 			--write out file again, if any content exists for it.
 			table.insert(installedData, 1, tostring(self.pack.version))
-			if not fs.exists(fs.combine(fs.combine(package.installRoot, "/etc/.installed"), self.pack.repo)) then fs.makeDir(fs.combine(fs.combine(package.installRoot, "/etc/.installed"), self.pack.repo)) end
+			if not fs.exists(fs.combine(fs.combine(backpack.installRoot, "/etc/.installed"), self.pack.repo)) then fs.makeDir(fs.combine(fs.combine(backpack.installRoot, "/etc/.installed"), self.pack.repo)) end
 			local handle = io.open(installedFile, "w")
 			if handle then
 				for k, v in ipairs(installedData) do
@@ -303,7 +303,7 @@ local queueMeta = {__index = TransQueue}
 
 function newTransactionQueue(packName, removing)
 	local pack
-	if package.list[packName] and package.list[packName].version then pack = package.list[packName] else return nil, "No such package!" end
+	if backpack.list[packName] and backpack.list[packName].version then pack = backpack.list[packName] else return nil, "No such package!" end
 	local queue = {
 		pack = pack,
 		removing = removing,
@@ -528,7 +528,7 @@ downloadFunctions.grin = function(pack, env, queue, info)
 	local fullName = pack.repo.."/"..pack.name
 	local status
 	parallel.waitForAny(function()
-		status = env.shell.run("pastebin run VuBNx3va -e -u", info.author, "-r", info.repository, fs.combine(fs.combine(package.installRoot, pack.target), pack.name))
+		status = env.shell.run("pastebin run VuBNx3va -e -u", info.author, "-r", info.repository, fs.combine(fs.combine(backpack.installRoot, pack.target), pack.name))
 	end, function()
 		while true do
 			local e, msg = os.pullEvent("grin_install_status")
@@ -543,7 +543,7 @@ downloadFunctions.meta = function(pack, env, queue)
 end
 
 local function findInstalledVersionByPath(packName, path)
-	for i, file in ipairs(package.installed[packName].files) do
+	for i, file in ipairs(backpack.installed[packName].files) do
 		if file.path == path then return file.version end
 	end
 end
@@ -570,7 +570,7 @@ local Package = {
 			for match in string.gmatch(self.setup, "(%S+)") do
 				table.insert(setupArgs, match)
 			end
-			setupArgs[1] = fs.combine(fs.combine(package.installRoot, self.target), setupArgs[1])
+			setupArgs[1] = fs.combine(fs.combine(backpack.installRoot, self.target), setupArgs[1])
 			local envQueue = queue:env()
 			if not os.run({shell = env.shell, packman = envQueue, pack = envQueue, fs = new_fs}, unpack(setupArgs)) then
 				--setup script threw an error.
@@ -584,7 +584,7 @@ local Package = {
 		return true
 	end,
 	remove = function(self, env)
-		if not package.installed[self.fullName] then return false end
+		if not backpack.installed[self.fullName] then return false end
 		local queue = newTransactionQueue(self.fullName, true)
 
 		if self.cleanup then
@@ -593,15 +593,15 @@ local Package = {
 			for match in string.gmatch(self.cleanup, "(%S+)") do
 				table.insert(cleanupArgs, match)
 			end
-			cleanupArgs[1] = fs.combine(fs.combine(package.installRoot, self.target), cleanupArgs[1])
+			cleanupArgs[1] = fs.combine(fs.combine(backpack.installRoot, self.target), cleanupArgs[1])
 			local envQueue = queue:env()
 			os.run({shell = env.shell, packman = envQueue, pack = envQueue, fs = new_fs}, unpack(cleanupArgs))
 			if not queue:finish() then return false end
 		end
 
-		local fileList = package.installed[self.fullName].files
+		local fileList = backpack.installed[self.fullName].files
 		for i = #fileList, 1, -1 do
-			if fs.exists(fs.combine(package.installRoot, fileList[i].path)) and fs.isDir(fs.combine(package.installRoot, fileList[i].path)) then
+			if fs.exists(fs.combine(backpack.installRoot, fileList[i].path)) and fs.isDir(fs.combine(backpack.installRoot, fileList[i].path)) then
 				queue:removeDir(fileList[i].path)
 			else
 				queue:removeFile(fileList[i].path)
@@ -612,7 +612,7 @@ local Package = {
 		return queue:finish()
 	end,
 	upgrade = function(self, env)
-		if not package.installed[self.fullName] then return false end
+		if not backpack.installed[self.fullName] then return false end
 		local queue = newTransactionQueue(self.fullName)
 		if updateTypes[self.download.type.type] == "incremental" then
 			local updatedFiles = {}
@@ -642,9 +642,9 @@ local Package = {
 				updatedFiles[path] = true
 			end
 
-			for i, fileInfo in ipairs(package.installed[self.fullName].files) do
-				if not updatedFiles[fileInfo.path] and fileInfo.version ~= package.installed[self.fullName].version then
-					if not fs.isDir(fs.combine(package.installRoot, fileInfo.path)) or (fs.isDir(fs.combine(package.installRoot, fileInfo.path)) and #(fs.list(fs.combine(package.installRoot, fileInfo.path))) == 0) then
+			for i, fileInfo in ipairs(backpack.installed[self.fullName].files) do
+				if not updatedFiles[fileInfo.path] and fileInfo.version ~= backpack.installed[self.fullName].version then
+					if not fs.isDir(fs.combine(backpack.installRoot, fileInfo.path)) or (fs.isDir(fs.combine(backpack.installRoot, fileInfo.path)) and #(fs.list(fs.combine(backpack.installRoot, fileInfo.path))) == 0) then
 						queue:removeFile(fileInfo.path)
 					end
 				end
@@ -686,12 +686,12 @@ end
 
 function findDependencies(packageName, _dependencyTable)
 	local dependencyTable = _dependencyTable or {}
-	if package.list[packageName] then
+	if backpack.list[packageName] then
 		dependencyTable[packageName] = true
-		for packName in pairs(package.list[packageName].dependencies) do
+		for packName in pairs(backpack.list[packageName].dependencies) do
 			packName = packName:lower()
 			if packName ~= "none" and not dependencyTable[packName] then
-				dependencyTable, errmsg = package.findDependencies(packName, dependencyTable)
+				dependencyTable, errmsg = backpack.findDependencies(packName, dependencyTable)
 				if not dependencyTable then return nil, errmsg end
 			end
 		end
@@ -844,8 +844,8 @@ local function addPacks(file)
 end
 
 function load()
-	for k, v in pairs(package.list) do
-		package.list[k] = nil
+	for k, v in pairs(backpack.list) do
+		backpack.list[k] = nil
 	end
 	if fs.exists("/etc/repositories") then
 		for _, file in ipairs(fs.list("/etc/repositories")) do
@@ -853,14 +853,14 @@ function load()
 		end
 	end
 
-	for k, v in pairs(package.installed) do
-		package.installed[k] = nil
+	for k, v in pairs(backpack.installed) do
+		backpack.installed[k] = nil
 	end
-	if fs.exists(fs.combine(package.installRoot, "/etc/.installed")) and fs.isDir(fs.combine(package.installRoot, "/etc/.installed")) then
-		for _, repo in ipairs(fs.list(fs.combine(package.installRoot, "/etc/.installed"))) do
-			for _, file in ipairs(fs.list(fs.combine(fs.combine(package.installRoot, "/etc/.installed"), repo))) do
+	if fs.exists(fs.combine(backpack.installRoot, "/etc/.installed")) and fs.isDir(fs.combine(backpack.installRoot, "/etc/.installed")) then
+		for _, repo in ipairs(fs.list(fs.combine(backpack.installRoot, "/etc/.installed"))) do
+			for _, file in ipairs(fs.list(fs.combine(fs.combine(backpack.installRoot, "/etc/.installed"), repo))) do
 				local name = repo.."/"..file
-				local handle = io.open(fs.combine(fs.combine(fs.combine(package.installRoot, "/etc/.installed"), repo), file), "r")
+				local handle = io.open(fs.combine(fs.combine(fs.combine(backpack.installRoot, "/etc/.installed"), repo), file), "r")
 				if handle then
 					installed[name] = {files = {}}
 					local packVersion
@@ -894,7 +894,7 @@ function load()
 		new_fs[k] = nil
 	end
 	do
-		local root = package.installRoot
+		local root = backpack.installRoot
 		--override fs api to use installRoot, recreated when loading to accomodate installRoot changes.
 		local function fsWrap(name,f,n)
 			return function(...)
