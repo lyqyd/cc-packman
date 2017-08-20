@@ -4,8 +4,8 @@ name = packman
 		filename = packman
 	setup = packman fetch
 	category = utility
-	dependencies = main/package
-	version = 0.4.1
+	dependencies = main/backpack
+	version = 0.5.0
 	size = 17227
 end
 
@@ -21,13 +21,21 @@ name = easy-shell
 	size = 1626
 end
 
-name = package
+name = backpack
 	type = raw
-		url = https://raw.githubusercontent.com/lyqyd/cc-packman/master/package
-		filename = package
+		url = https://raw.githubusercontent.com/lyqyd/cc-packman/master/backpack
+		filename = backpack
 	category = utility api
 	target = /usr/apis
 	dependencies = none
-	version = 0.2
-	size = 28393
+	version = 0.3.0
+	size = 27526
+end
+
+name = package
+	type = meta
+	category = deprecated
+	dependencies = main/backpack
+	version = 0.3.0
+	size = 0
 end
