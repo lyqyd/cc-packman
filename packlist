@@ -29,7 +29,7 @@ name = backpack
 	target = /usr/apis
 	dependencies = none
 	version = 0.3.2
-	size = 34053
+	size = 34055
 end
 
 name = package
