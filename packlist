@@ -28,8 +28,8 @@ name = backpack
 	category = utility api
 	target = /usr/apis
 	dependencies = none
-	version = 0.3.0
-	size = 27526
+	version = 0.3.1
+	size = 30143
 end
 
 name = package
