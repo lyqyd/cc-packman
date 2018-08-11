@@ -642,6 +642,25 @@ local Package = {
 				updatedFiles[path] = true
 			end
 
+			if self.update then
+				local queue = newTransactionQueue(self.fullName)
+				--packman key included solely for backwards compatibility, usage is deprecated in favor of pack.
+				local updateArgs = {}
+				for match in string.gmatch(self.update, "(%S+)") do
+					table.insert(updateArgs, match)
+				end
+				updateArgs[1] = fs.combine(fs.combine(backpack.installRoot, self.target), updateArgs[1])
+				local envQueue = queue:env()
+				if not os.run({shell = env.shell, packman = envQueue, pack = envQueue, fs = new_fs}, unpack(updateArgs)) then
+					--update script threw an error.
+					printWarning("Package "..self.fullName.." failed to update, leaving old version")
+					return false
+				end
+
+				--this must be done a second time to finalize any changes made by the install script.
+				return queue:finish()
+			end
+
 			for i, fileInfo in ipairs(backpack.installed[self.fullName].files) do
 				if not updatedFiles[fileInfo.path] and fileInfo.version ~= backpack.installed[self.fullName].version then
 					if not fs.isDir(fs.combine(backpack.installRoot, fileInfo.path)) or (fs.isDir(fs.combine(backpack.installRoot, fileInfo.path)) and #(fs.list(fs.combine(backpack.installRoot, fileInfo.path))) == 0) then
@@ -654,6 +673,24 @@ local Package = {
 			return queue:finish()
 		elseif updateTypes[self.download.type.type] == "overwrite" then
 			if not downloadFunctions[self.download.type.type](self, env, queue, self.download.type) then return false end
+			if self.update then
+				local queue = newTransactionQueue(self.fullName)
+				--packman key included solely for backwards compatibility, usage is deprecated in favor of pack.
+				local updateArgs = {}
+				for match in string.gmatch(self.update, "(%S+)") do
+					table.insert(updateArgs, match)
+				end
+				updateArgs[1] = fs.combine(fs.combine(backpack.installRoot, self.target), updateArgs[1])
+				local envQueue = queue:env()
+				if not os.run({shell = env.shell, packman = envQueue, pack = envQueue, fs = new_fs}, unpack(updateArgs)) then
+					--update script threw an error.
+					printWarning("Package "..self.fullName.." failed to update, leaving old version")
+					return false
+				end
+
+				--this must be done a second time to finalize any changes made by the install script.
+				return queue:finish()
+			end
 			return queue:finish()
 		elseif updateTypes[self.download.type.type] == "replace" then
 			return self:remove(env) and self:install(env)
@@ -770,7 +807,7 @@ local function addPacks(file)
 					printWarning("Unexpected "..property.." at line "..lineCount.." in "..file)
 					state = "dirty"
 				end
-			elseif property == "target" or property == "setup" or property == "update" or property == "cleanup" or property == "version" or property == "size" then
+			elseif property == "target" or property == "setup" or property == "update" or property == "cleanup" or property == "version" or property == "size" or property == "update" then
 				if state == "main" then
 					entryTable[property] = value
 				else
