@@ -17,8 +17,8 @@ name = easy-shell
 	cleanup = easy-shell remove
 	category = shell
 	dependencies = none
-	version = 0.2
-	size = 1626
+	version = 1.0
+	size = 2385
 end
 
 name = backpack
