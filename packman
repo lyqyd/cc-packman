@@ -176,7 +176,7 @@ if fetch then
 		end
 		remoteHandle.close()
 	else
-		printWarning("could not retrieve remote file.")
+		printWarning("Could not retrieve remote file.")
 	end
 	if repolistContent then
 		if queue then
@@ -344,12 +344,24 @@ local function install(name)
 	return raw_package_operation(name, "install")
 end
 
+local function installHelp(name)
+	return raw_package_operation(name, "installHelp")
+end
+
 local function remove(name)
 	return raw_package_operation(name, "remove")
 end
 
+local function removeHelp(name)
+	return raw_package_operation(name, "removeHelp")
+end
+
 local function upgrade(name)
 	return raw_package_operation(name, "upgrade")
+end
+
+local function upgradeHelp(name)
+	return raw_package_operation(name, "upgradeHelp")
 end
 
 if mode == "bootstrap" then
@@ -582,6 +594,88 @@ elseif mode == "remove" then
 			for _, pName in pairs(packageList) do
 				printInformation("Removing "..pName)
 				remove(pName)
+			end
+		else
+			io.write("Nothing to do!\n")
+		end
+	end
+elseif mode == "install-help" then
+	if #operation.arguments >= 1 then
+		local installString = ""
+		for packageNumber, packageName in ipairs(operation.arguments) do
+			local result = lookupPackage(packageName)
+			if not result then
+				printWarning("Could not find package "..packageName..".")
+			else
+				installString = installString..result.." "
+			end
+		end
+		if #installString > 0 then
+			if not forced then
+				io.write("The following packages' help files will be installed: "..installString.."\n")
+				io.write("Continue? (Y/n)\n")
+				local input = getUserInput("y")
+				if string.sub(input:lower(), 1, 1) == "n" then
+					return true
+				end
+			end
+			for packageName in string.gmatch(installString, "%S+") do
+				if not installHelp(packageName) then
+					printWarning("Could not install help files for package "..packageName)
+				end
+			end
+		end
+	end
+elseif mode == "upgrade-help" then
+	if #operation.arguments >= 1 then
+		local upgradeString = ""
+		for packageNumber, packageName in ipairs(operation.arguments) do
+			local result = lookupPackage(packageName)
+			if not result then
+				printWarning("Could not find package "..packageName..".")
+			else
+				upgradeString = upgradeString..result.." "
+			end
+		end
+		if #upgradeString > 0 then
+			if not forced then
+				io.write("The following packages' help files will be installed: "..upgradeString.."\n")
+				io.write("Continue? (Y/n)\n")
+				local input = getUserInput("y")
+				if string.sub(input:lower(), 1, 1) == "n" then
+					return true
+				end
+			end
+			for packageName in string.gmatch(upgradeString, "%S+") do
+				if not installHelp(packageName) then
+					printWarning("Could not install help files for package "..packageName)
+				end
+			end
+		end
+	end
+elseif mode == "remove-help" then
+	if #operation.arguments >= 1 then
+		local removeString = ""
+		for _, name in ipairs(operation.arguments) do
+			local result = lookupPackage(name, true)
+			if not result then
+				printWarning("Could not find package "..name)
+			else
+				removeString = removeString..result.." "
+			end
+		end
+		if #removeString > 0 then
+			if not forced then
+				io.write("The following packages' help files will be removed: "..removeString.."\n")
+				io.write("Continue? (y/N)\n")
+				local input = getUserInput("y")
+				if string.sub(input:lower(), 1, 1) ~= "y" then
+					return true
+				end
+			end
+			for packageName in string.gmatch(removeString, "%S+") do
+				printInformation("Removing help files for package"..packageName)
+				removeHelp(packageName)
 			end
 		else
 			io.write("Nothing to do!\n")

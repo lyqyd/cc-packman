@@ -438,9 +438,9 @@ end
 
 local downloadFunctions = {}
 
-downloadFunctions.raw = function(pack, env, queue, info)
+downloadFunctions.raw = function(pack, env, queue, info, target)
 	-- Delegate to local raw
-	local path = fs.combine(pack.target, info.filename)
+	local path = fs.combine(target, info.filename)
 
 	if string.match(path, "(.-)/[^/]+$") then
 		queue:makeDir(string.match(path, "(.-)/[^/]+$"))
@@ -454,10 +454,10 @@ downloadFunctions.raw = function(pack, env, queue, info)
 	end
 end
 
-downloadFunctions.multi = function(pack, env, queue, info)
+downloadFunctions.multi = function(pack, env, queue, info, target)
 	local files = info.files
 	for i = 1, #files do
-		local path = fs.combine(pack.target, files[i].name)
+		local path = fs.combine(target, files[i].name)
 
 		if string.match(path, "(.-)/[^/]+$") then
 			queue:makeDir(string.match(path, "(.-)/[^/]+$"))
@@ -472,10 +472,10 @@ downloadFunctions.multi = function(pack, env, queue, info)
 	return true
 end
 
-downloadFunctions.github = function(pack, env, queue, info)
+downloadFunctions.github = function(pack, env, queue, info, target)
 	local contents = lookupFunctions.github(info)
 	if not contents then return nil, "content fetch failure" end
-	local localTarget = pack.target or ""
+	local localTarget = target or ""
 	for num, file in ipairs(contents) do
 		local path = fs.combine(localTarget, file.path)
 		if string.match(path, "(.-)/[^/]+$") then
@@ -491,9 +491,9 @@ downloadFunctions.github = function(pack, env, queue, info)
 	return true
 end
 
-downloadFunctions.bitbucket = function(pack, env, queue, info)
+downloadFunctions.bitbucket = function(pack, env, queue, info, target)
 	local contents = lookupFunctions.bitbucket(info)
-	local localTarget = pack.target or ""
+	local localTarget = target or ""
 	for num, file in ipairs(contents) do
 		local path = fs.combine(localTarget, file.path)
 		if string.match(path, "(.-)/[^/]+$") then
@@ -509,8 +509,8 @@ downloadFunctions.bitbucket = function(pack, env, queue, info)
 	return true
 end
 
-downloadFunctions.pastebin = function(pack, env, queue, info)
-	local path = fs.combine(pack.target, info.filename) 
+downloadFunctions.pastebin = function(pack, env, queue, info, target)
+	local path = fs.combine(target, info.filename) 
 
 	if string.match(path, "(.-)/[^/]+$") then
 		queue:makeDir(string.match(path, "(.-)/[^/]+$"))
@@ -524,11 +524,11 @@ downloadFunctions.pastebin = function(pack, env, queue, info)
 	end
 end
 
-downloadFunctions.grin = function(pack, env, queue, info)
+downloadFunctions.grin = function(pack, env, queue, info, target)
 	local fullName = pack.repo.."/"..pack.name
 	local status
 	parallel.waitForAny(function()
-		status = env.shell.run("pastebin run VuBNx3va -e -u", info.author, "-r", info.repository, fs.combine(fs.combine(backpack.installRoot, pack.target), pack.name))
+		status = env.shell.run("pastebin run VuBNx3va -e -u", info.author, "-r", info.repository, fs.combine(fs.combine(backpack.installRoot, target), pack.name))
 	end, function()
 		while true do
 			local e, msg = os.pullEvent("grin_install_status")
@@ -538,7 +538,7 @@ downloadFunctions.grin = function(pack, env, queue, info)
 	return status
 end
 
-downloadFunctions.meta = function(pack, env, queue)
+downloadFunctions.meta = function()
 	return true
 end
 
@@ -551,37 +551,51 @@ end
 local new_fs = {}
 
 local Package = {
-	install = function(self, env)
+	installFiles = function(self, env)
 		local queue
 		if downloadFunctions[self.download.type.type] then
 			queue = newTransactionQueue(self.fullName)
-			if not downloadFunctions[self.download.type.type](self, env, queue, self.download.type) then return false end
+			if not downloadFunctions[self.download.type.type](self, env, queue, self.download.type, self.target) then return false end
 		else
 			return false
 		end
 
-		if not queue:finish() then return false end
-
-		--execute startup script, if present.
-		if self.setup then
-			local queue = newTransactionQueue(self.fullName)
-			--packman key included solely for backwards compatibility, usage is deprecated in favor of pack.
-			local setupArgs = {}
-			for match in string.gmatch(self.setup, "(%S+)") do
-				table.insert(setupArgs, match)
-			end
-			setupArgs[1] = fs.combine(fs.combine(backpack.installRoot, self.target), setupArgs[1])
-			local envQueue = queue:env()
-			if not os.run({shell = env.shell, packman = envQueue, pack = envQueue, fs = new_fs}, unpack(setupArgs)) then
-				--setup script threw an error.
-				printWarning("Package "..self.fullName.." failed to install, removing")
-				return self:remove(env)
-			end
-
-			--this must be done a second time to finalize any changes made by the install script.
-			return queue:finish()
+		return queue:finish()
+	end,
+	installHelp = function(self, env)
+		local queue
+		if downloadFunctions[self.download.help.type] then
+			queue = newTransactionQueue(self.fullName)
+			if not downloadFunctions[self.download.help.type](self, env, queue, self.download.help, fs.combine("/etc/help", self.fullName) then return false end
+		else
+			return false
 		end
-		return true
+
+		return queue:finish()
+	end,
+	finalizeInstall = function(self, env)
+		--execute startup script, if present.
+		if not self.setup then return true end
+
+		local queue = newTransactionQueue(self.fullName)
+		--packman key included solely for backwards compatibility, usage is deprecated in favor of pack.
+		local setupArgs = {}
+		for match in string.gmatch(self.setup, "(%S+)") do
+			table.insert(setupArgs, match)
+		end
+		setupArgs[1] = fs.combine(fs.combine(backpack.installRoot, self.target), setupArgs[1])
+		local envQueue = queue:env()
+		if not os.run({shell = env.shell, packman = envQueue, pack = envQueue, fs = new_fs}, unpack(setupArgs)) then
+			--setup script threw an error.
+			printWarning("Package "..self.fullName.." failed to install, removing")
+			return self:remove(env)
+		end
+
+		--this must be done a second time to finalize any changes made by the install script.
+		return queue:finish()
+	end,
+	install = function(self, env)
+		return self:installFiles(env) and self:finalizeInstall(env)
 	end,
 	remove = function(self, env)
 		if not backpack.installed[self.fullName] then return false end
@@ -611,7 +625,29 @@ local Package = {
 
 		return queue:finish()
 	end,
-	upgrade = function(self, env)
+	removeHelp = function(self, env)
+		if not backpack.installed[self.fullName] then return false end
+		local queue = newTransactionQueue(self.fullName, true)
+
+		local function removeAllFiles(path)
+			local list = fs.list(path)
+			for i = 1, #list do
+				if fs.isDir(fs.combine(path, list[i])) then
+					removeAllFiles(fs.combine(path, list[i]))
+				else
+					queue:removeFile(fs.combine(path, list[i]))
+				end
+			end
+			queue:removeDir(path)
+		end
+
+		if fs.exists(fs.combine(backpack.installRoot, fs.combine("/etc/help", self.fullName))) then
+			removeAllFiles(fs.combine(backpack.installRoot, fs.combine("/etc/help", self.fullName)))
+			queue:removeDir(fs.combine(backpack.installRoot, fs.combine("/etc/help", self.repo)))
+		end
+		return queue:finish()
+	end,
+	upgradeFiles = function(self, env)
 		if not backpack.installed[self.fullName] then return false end
 		local queue = newTransactionQueue(self.fullName)
 		if updateTypes[self.download.type.type] == "incremental" then
@@ -642,37 +678,91 @@ local Package = {
 				updatedFiles[path] = true
 			end
 
-			if self.update then
-				local queue = newTransactionQueue(self.fullName)
-				--packman key included solely for backwards compatibility, usage is deprecated in favor of pack.
-				local updateArgs = {}
-				for match in string.gmatch(self.update, "(%S+)") do
-					table.insert(updateArgs, match)
-				end
-				updateArgs[1] = fs.combine(fs.combine(backpack.installRoot, self.target), updateArgs[1])
-				local envQueue = queue:env()
-				if not os.run({shell = env.shell, packman = envQueue, pack = envQueue, fs = new_fs}, unpack(updateArgs)) then
-					--update script threw an error.
-					printWarning("Package "..self.fullName.." failed to update, leaving old version")
-					return false
-				end
-
-				--this must be done a second time to finalize any changes made by the install script.
-				return queue:finish()
-			end
-
 			for i, fileInfo in ipairs(backpack.installed[self.fullName].files) do
-				if not updatedFiles[fileInfo.path] and fileInfo.version ~= backpack.installed[self.fullName].version then
-					if not fs.isDir(fs.combine(backpack.installRoot, fileInfo.path)) or (fs.isDir(fs.combine(backpack.installRoot, fileInfo.path)) and #(fs.list(fs.combine(backpack.installRoot, fileInfo.path))) == 0) then
-						queue:removeFile(fileInfo.path)
+				--skip over the help files when deleting files not on the upgrade list.
+				if not string.match(fileInfo.path, "^/?etc/help/") then
+					if not updatedFiles[fileInfo.path] and fileInfo.version ~= backpack.installed[self.fullName].version then
+						if not fs.isDir(fs.combine(backpack.installRoot, fileInfo.path)) then
+							queue:removeFile(fileInfo.path)
+						elseif fs.isDir(fs.combine(backpack.installRoot, fileInfo.path)) and #(fs.list(fs.combine(backpack.installRoot, fileInfo.path))) == 0 then
+							queue:removeDir(fileInfo.path)
+						end
 					end
 				end
 			end
 
-			
-			return queue:finish()
+			return queue.finish()
 		elseif updateTypes[self.download.type.type] == "overwrite" then
-			if not downloadFunctions[self.download.type.type](self, env, queue, self.download.type) then return false end
+			if not downloadFunctions[self.download.type.type](self, env, queue, self.download.type, self.target) then return false end
+			return queue:finish()
+		elseif updateTypes[self.download.type.type] == "replace" then
+			if fs.exists(fs.combine(backpack.installRoot, fs.combine("/etc/help", self.fullName)) then
+				--need to update help files as well as regular files
+				return self:remove(env) and self:installFiles(env) and self:installHelp(env) and self:finalizeInstall(env)
+			else
+				return self:remove(env) and self:install(env)
+			end
+		end
+	end,
+	upgradeHelp = function(self, env)
+		if not backpack.installed[self.fullName] then return false end
+		local queue = newTransactionQueue(self.fullName)
+		if updateTypes[self.download.help.type] == "incremental" then
+			local updatedFiles = {}
+			local contents = lookupFunctions[self.download.help.type](self.download.help)
+			local target = fs.combine("/etc/help", self.fullName)
+			for num, file in ipairs(contents) do
+				local path = fs.combine(target, file.path)
+				if file.version ~= findInstalledVersionByPath(self.fullName, path) then
+					if string.match(path, "(.-)/[^/]+$") then
+						queue:makeDir(string.match(path, "(.-)/[^/]+$"))
+					end
+					if self.download.help.type == "github" then
+						local content = raw("https://raw.github.com/"..self.download.help.author.."/"..self.download.help.repository.."/"..self.download.help.branch.."/"..file.path)
+						if content then
+							queue:addFile(path, content, file.version)
+						else
+							return false
+						end
+					elseif self.download.help.type == "bitbucket" then
+						local content = raw("https://bitbucket.org/"..self.download.help.author.."/"..self.download.help.repository.."/raw/"..self.download.help.branch.."/"..file.path)
+						if content then
+							queue:addFile(path, content, file.version)
+						else
+							return false
+						end
+					end
+				end
+				updatedFiles[path] = true
+			end
+
+			for i, fileInfo in ipairs(backpack.installed[self.fullName].files) do
+				if not updatedFiles[fileInfo.path] and fileInfo.version ~= backpack.installed[self.fullName].version then
+					--skip over non-help files
+					if string.match(fileInfo.path, "^/?etc/help/") then
+						if not updatedFiles[fileInfo.path] and fileInfo.version ~= backpack.installed[self.fullName].version then
+							if not fs.isDir(fs.combine(backpack.installRoot, fileInfo.path)) then
+								queue:removeFile(fileInfo.path)
+							elseif fs.isDir(fs.combine(backpack.installRoot, fileInfo.path)) and #(fs.list(fs.combine(backpack.installRoot, fileInfo.path))) == 0 then
+								queue:removeDir(fileInfo.path)
+							end
+						end
+					end
+				end
+			end
+
+			return queue.finish()
+		elseif updateTypes[self.download.help.type] == "overwrite" then
+			if not downloadFunctions[self.download.help.type](self, env, queue, self.download.help, fs.combine("/etc/help", self.fullName)) then return false end
+			return queue:finish()
+		elseif updateTypes[self.download.help.type] == "replace" then
+			return self:removeHelp(env) and self:installHelp(env)
+		end
+	end,
+	finalizeUpgrade = function(self, env)
+		if not backpack.installed[self.fullName] then return false end
+		local queue = newTransactionQueue(self.fullName)
+		if updateTypes[self.download.type.type] == "incremental" or updateTypes[self.download.type.type] == "overwrite" then
 			if self.update then
 				local queue = newTransactionQueue(self.fullName)
 				--packman key included solely for backwards compatibility, usage is deprecated in favor of pack.
@@ -684,17 +774,18 @@ local Package = {
 				local envQueue = queue:env()
 				if not os.run({shell = env.shell, packman = envQueue, pack = envQueue, fs = new_fs}, unpack(updateArgs)) then
 					--update script threw an error.
-					printWarning("Package "..self.fullName.." failed to update, leaving old version")
+					printWarning("Package "..self.fullName.." failed to complete update script.")
 					return false
 				end
 
 				--this must be done a second time to finalize any changes made by the install script.
 				return queue:finish()
 			end
-			return queue:finish()
-		elseif updateTypes[self.download.type.type] == "replace" then
-			return self:remove(env) and self:install(env)
 		end
+		return true
+	end,
+	upgrade = function(self, env)
+		return self:upgradeFiles(env) and self:finalizeUpgrade(env)
 	end,
 }
 

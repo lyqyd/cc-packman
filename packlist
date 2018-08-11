@@ -5,8 +5,8 @@ name = packman
 	setup = packman fetch
 	category = utility
 	dependencies = main/backpack
-	version = 0.5.0
-	size = 17227
+	version = 0.5.1
+	size = 20957
 end
 
 name = easy-shell
@@ -28,8 +28,8 @@ name = backpack
 	category = utility api
 	target = /usr/apis
 	dependencies = none
-	version = 0.3.1
-	size = 30143
+	version = 0.3.2
+	size = 34053
 end
 
 name = package
