@@ -566,7 +566,7 @@ local Package = {
 		local queue
 		if downloadFunctions[self.download.help.type] then
 			queue = newTransactionQueue(self.fullName)
-			if not downloadFunctions[self.download.help.type](self, env, queue, self.download.help, fs.combine("/etc/help", self.fullName) then return false end
+			if not downloadFunctions[self.download.help.type](self, env, queue, self.download.help, fs.combine("/etc/help", self.fullName)) then return false end
 		else
 			return false
 		end
@@ -696,7 +696,7 @@ local Package = {
 			if not downloadFunctions[self.download.type.type](self, env, queue, self.download.type, self.target) then return false end
 			return queue:finish()
 		elseif updateTypes[self.download.type.type] == "replace" then
-			if fs.exists(fs.combine(backpack.installRoot, fs.combine("/etc/help", self.fullName)) then
+			if fs.exists(fs.combine(backpack.installRoot, fs.combine("/etc/help", self.fullName))) then
 				--need to update help files as well as regular files
 				return self:remove(env) and self:installFiles(env) and self:installHelp(env) and self:finalizeInstall(env)
 			else
