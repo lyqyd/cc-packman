@@ -149,4 +149,4 @@ You can add a repository to the official list by submitting a pull request that 
 
 ## 7.4 - Custom Repositories
 
-Custom repositories can be added to a packman install by placing the repository file in /etc/repositories. Attempting to add the repository to the repolist file on the installed instance will not help, as this file is re-created each time `packman fetch` is run, which will destroy the additional line. Custom updating repositories is a planned feature.
+Custom repositories can be added to a packman install by placing the repository file in /etc/repositories. Packman can also keep custom repository files up to date with the `/etc/custom-repolist` file. This file is in the same format as `repolist`.

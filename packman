@@ -211,7 +211,7 @@ if fetch then
 		queue = backpack.newTransactionQueue("main/backpack")
 	end
 	io.write("Fetching Repository List\n")
-	local repolistContent
+	local repolistContent = ""
 	remoteHandle = http.get("https://raw.githubusercontent.com/lyqyd/cc-packman/master/repolist")
 	if remoteHandle then
 		repolistContent = remoteHandle.readAll()
@@ -231,6 +231,15 @@ if fetch then
 	else
 		printWarning("Could not retrieve remote file.")
 	end
+
+	if fs.exists("/etc/custom-repolist") then
+		local fileHandle = io.open("/etc/custom-repolist", "r")
+		if fileHandle then
+			repolistContent = repolistContent.."\n"..fileHandle:read("*a")
+			fileHandle:close()
+		end
+	end
+
 	if repolistContent then
 		if queue then
 			queue:makeDir("/etc/repositories")
