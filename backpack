@@ -563,6 +563,7 @@ local Package = {
 		return queue:finish()
 	end,
 	installHelp = function(self, env)
+		if not self.download.help then return true end
 		local queue
 		if downloadFunctions[self.download.help.type] then
 			queue = newTransactionQueue(self.fullName)
@@ -706,6 +707,7 @@ local Package = {
 	end,
 	upgradeHelp = function(self, env)
 		if not backpack.installed[self.fullName] then return false end
+		if not self.download.help then return true end
 		local queue = newTransactionQueue(self.fullName)
 		if updateTypes[self.download.help.type] == "incremental" then
 			local updatedFiles = {}

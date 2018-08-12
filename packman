@@ -8,6 +8,9 @@ local opwords = {
 	install = true,
 	remove = true,
 	update = true,
+	["install-help"] = true,
+	["remove-help"] = true,
+	["update-help"] = true,
 	list = true,
 	search = true,
 	bootstrap = true,
@@ -28,6 +31,9 @@ if #args < 1 or (not opwords[args[1]] and not argwords[args[1]]) then
 	io.write("packman [options] list [pattern]\n")
 	io.write("packman [options] search [pattern]\n")
 	io.write("packman bootstrap\n")
+	io.write("packman [options] install-help <package name[s]>\n")
+	io.write("packman [options] update-help <package name[s]>\n")
+	io.write("packman [options] remove-help <package name[s]>\n")
 	io.write("\n")
 	io.write("Options:\n")
 	io.write("fetch\n")
@@ -40,6 +46,53 @@ if #args < 1 or (not opwords[args[1]] and not argwords[args[1]]) then
 	--io.write("  Set root directory to install packages in\n")
 	return
 end
+
+local config = {}
+
+function loadConfig()
+	local path = "/etc/packman/packman.conf"
+	--load a configuration file, given a fully-resolved path and an optional environment.
+	if not fs.exists(path) or fs.isDir(path) then return nil, "not a file" end
+	local env
+	if not _env then
+		--if we were not provided an environment, create one.
+		env = setmetatable({}, {__index = _G})
+	else
+		env = _env
+	end
+	local fn, err = loadfile(path)
+	if fn then
+		setfenv(fn, env)
+		local success, err = pcall(fn)
+		if success then
+			--strip the metatable from the environment before returning it.
+			config = setmetatable(env, {})
+		else
+			return nil, err
+		end
+	else
+		return nil, err
+	end
+end
+
+function saveConfig()
+	local path = "/etc/packman/packman.conf"
+	if not config or type(config) ~= "table" then return nil, "Not a configuration" end
+	local handle = io.open(path, "w")
+	if handle then
+		for k, v in pairs(config) do
+			local success, str = pcall(textutils.serialize, v)
+			if success then
+				handle:write(k.." = "..str.."\n\n")
+			end
+		end
+		handle:close()
+	else
+		return nil, "Could not write configuration."
+	end
+end
+
+loadConfig()
 
 local mode = ""
 local forced = false
@@ -341,7 +394,11 @@ local function raw_package_operation(name, funcName)
 end
 
 local function install(name)
-	return raw_package_operation(name, "install")
+	if config.manageHelp then
+		return raw_package_operation(name, "installFiles") and raw_package_operation(name, "installHelp") and raw_package_operation(name, "finalizeInstall")
+	else
+		return raw_package_operation(name, "install")
+	end
 end
 
 local function installHelp(name)
@@ -349,7 +406,11 @@ local function installHelp(name)
 end
 
 local function remove(name)
-	return raw_package_operation(name, "remove")
+	if config.manageHelp then
+		return raw_package_operation(name, "removeHelp") and raw_package_operation(name, "remove")
+	else
+		return raw_package_operation(name, "remove")
+	end
 end
 
 local function removeHelp(name)
@@ -357,7 +418,11 @@ local function removeHelp(name)
 end
 
 local function upgrade(name)
-	return raw_package_operation(name, "upgrade")
+	if config.manageHelp then
+		return raw_package_operation(name, "upgradeFiles") and raw_package_operation(name, "upgradeHelp") and raw_package_operation(name, "finalizeUpgrade")
+	else
+		return raw_package_operation(name, "upgrade")
+	end
 end
 
 local function upgradeHelp(name)
@@ -424,6 +489,9 @@ if mode == "bootstrap" then
 	--reload backpack API.
 	os.unloadAPI("backpack")
 	loadPackageAPI()
+
+	config.manageHelp = false
+	saveConfig()
 elseif mode == "install" then
 	if #operation.arguments >= 1 then
 		local installList = {}
