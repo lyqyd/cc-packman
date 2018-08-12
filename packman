@@ -742,7 +742,7 @@ elseif mode == "remove-help" then
 				end
 			end
 			for packageName in string.gmatch(removeString, "%S+") do
-				printInformation("Removing help files for package"..packageName)
+				printInformation("Removing help files for package "..packageName)
 				removeHelp(packageName)
 			end
 		else

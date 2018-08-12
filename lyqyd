@@ -8,6 +8,10 @@ name = LyqydOS
 	cleanup = installer remove
 	dependencies = lyqyd/framebuffer lyqyd/configuration lyqyd/lsh
 	target = /LyqydOS
+	help = github
+		author = lyqyd
+		repository = LyqydOS-help
+		branch = master
 	version = 1.9.10
 	size = 141605
 end
