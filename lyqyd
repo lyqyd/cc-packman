@@ -12,8 +12,8 @@ name = LyqydOS
 		author = lyqyd
 		repository = LyqydOS-help
 		branch = master
-	version = 1.9.10
-	size = 141605
+	version = 1.10.0
+	size = 142394
 end
 
 name = LyqydNet
@@ -35,8 +35,8 @@ name = lsh
 		branch = master
 	category = shell
 	dependencies = none
-	version = 0.4
-	size = 27706
+	version = 0.5.0
+	size = 28689
 end
 
 name = location
