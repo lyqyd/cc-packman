@@ -692,7 +692,7 @@ local Package = {
 				end
 			end
 
-			return queue.finish()
+			return queue:finish()
 		elseif updateTypes[self.download.type.type] == "overwrite" then
 			if not downloadFunctions[self.download.type.type](self, env, queue, self.download.type, self.target) then return false end
 			return queue:finish()
@@ -753,7 +753,7 @@ local Package = {
 				end
 			end
 
-			return queue.finish()
+			return queue:finish()
 		elseif updateTypes[self.download.help.type] == "overwrite" then
 			if not downloadFunctions[self.download.help.type](self, env, queue, self.download.help, fs.combine("/etc/help", self.fullName)) then return false end
 			return queue:finish()
