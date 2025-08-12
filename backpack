@@ -515,7 +515,7 @@ downloadFunctions.pastebin = function(pack, env, queue, info, target)
 	if string.match(path, "(.-)/[^/]+$") then
 		queue:makeDir(string.match(path, "(.-)/[^/]+$"))
 	end
-	local content = raw("http://pastebin.com/raw.php?i="..info.url)
+	local content = raw("http://pastebin.com/raw/"..info.url)
 	if content then
 		queue:addFile(path, content)
 		return true
