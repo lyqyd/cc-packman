@@ -236,7 +236,7 @@ name = inv-inventory
 		url = https://raw.githubusercontent.com/lyqyd/cc-inventory/master/inventory
 		filename = inventory
 	category = base automation inventory
-	dependencies = lyqyd/inv-base lyqyd/inv-flight
+	dependencies = lyqyd/inv-base lyqyd/inv-flight lyqyd/configuration
 	version = 0.1
 	size = 12978
 end
